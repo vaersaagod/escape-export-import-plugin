@@ -1,0 +1,33 @@
+{
+    "name": "escape/exportimport",
+    "description": "",
+    "type": "craft-plugin",
+    "version": "1.0.0",
+    "keywords": [],
+    "support": {
+        "docs": "???",
+        "issues": "???"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Værsågod",
+            "homepage": "https://vaersaagod.no"
+        }
+    ],
+    "require": {
+        "craftcms/cms": "^3.5.0",
+        "league/fractal": "^0.18.0"
+    },
+    "autoload": {
+        "psr-4": {
+          "escape\\exportimport\\": "src/"
+        }
+    },
+    "extra": {
+        "name": "Escape Export & Import",
+        "handle": "escape-exportimport",
+        "changelogUrl": "???",
+        "class": "escape\\exportimport\\ExportImport"
+    }
+}

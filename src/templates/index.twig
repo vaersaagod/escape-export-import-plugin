@@ -1,0 +1,73 @@
+{# @var craft \craft\web\twig\variables\CraftVariable #}
+{% extends "_layouts/cp" %}
+
+{% import "_includes/forms" as _forms %}
+
+{% set title = 'Import' %}
+{% set tabs = {
+    url: {
+        label: 'Import from URL',
+        url: cpUrl('import/url')
+    },
+    file: {
+        label: 'Import from file',
+        url: cpUrl('import/file')
+    }
+} %}
+
+{% set selectedTab = actionSlug ?? 'url' %}
+
+{% set content %}
+
+    <form method="post" accept-charset="UTF-8" enctype="multipart/form-data">
+
+        {{ actionInput('escape-exportimport/import') }}
+        {{ hiddenInput('siteId', currentSite.id) }}
+        {{ csrfInput() }}
+
+        <div>
+
+            {% if actionSlug == 'file' %}
+
+                <h2>Import data from JSON export</h2>
+
+                {{ _forms.fileField({
+                    label: 'JSON file',
+                    name: 'elementsJsonFile',
+                }) }}
+
+            {% else %}
+
+                <h2>Import data from URL</h2>
+
+                {{ _forms.textField({
+                    label: 'Import URL',
+                    name: 'elementsJsonUrl',
+                    type: 'url'
+                }) }}
+            {% endif %}
+
+            {{ _forms.lightswitchField({
+                label: 'Include assets',
+                instructions: 'Attempt to import related Assets from imported elements',
+                name: 'includeAssets',
+                on: includeAssets ?? true
+            }) }}
+
+            {{ _forms.lightswitchField({
+                label: 'Enable imported elements',
+                instructions: 'Set the status for imported elements',
+                name: 'enableElements',
+                on: enableElements ?? false
+            }) }}
+
+            <div class="btngroup">
+                <button type="submit" class="btn submit">Import</button>
+            </div>
+
+        </div>
+
+    </form>
+
+{% endset %}
+

@@ -1,0 +1,15 @@
+{% import '_includes/forms' as _forms %}
+
+{% set element = element ?? null %}
+{% if element and element.id and not element.draftId|default and not element.revisionId|default %}
+    <div class="data">
+        <h5 class="heading">Export URL</h5>
+        <div class="value">
+            {{ _forms.copytext({
+                value: actionUrl('escape-exportimport/export', {
+                    elementId: element.id
+                })
+            }) }}
+        </div>
+    </div>
+{% endif %}
