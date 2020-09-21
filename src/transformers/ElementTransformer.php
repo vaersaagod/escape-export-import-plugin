@@ -52,30 +52,10 @@ class ElementTransformer extends TransformerAbstract
         } else if ($element instanceof Asset) {
             $volume = $element->getVolume();
             $elementData['volume'] = $volume->handle;
-            $folder = $element->getFolder();
-            $rootFolder = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
-            if ($folder->id !== $rootFolder->id) {
-                $folderTree = [[
-                    'path' => $folder->path,
-                    'name' => $folder->name,
-                ]];
-                while ($folder->parentId) {
-                    $folder = $folder->getParent();
-                    if ($folder && $folder->id !== $rootFolder->id) {
-                        $folderTree[] = [
-                            'path' => $folder->path,
-                            'name' => $folder->name,
-                        ];
-                    }
-                }
-                $elementData['folders'] = \array_reverse($folderTree);
-            } else {
-                $elementData['folders'] = [];
-            }
             // Was this element originally imported from the Escape DAM?
             if (!!Craft::$app->getPlugins()->getPlugin('escapedam')) {
                 $damAsset = EscapeDam::getInstance()->files->getFileForImportedAsset($element);
-                $elementData['damId'] = $damAsset['id'];
+                $elementData['damData'] = $damAsset;
             }
         }
 

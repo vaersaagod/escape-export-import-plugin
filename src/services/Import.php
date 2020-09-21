@@ -204,7 +204,12 @@ class Import extends \craft\base\Component
                 }
                 
                 // Have to download the file!
-//                if ($damPluginInstalled && $damId = ($data['element']['damId'] ?? null)) {
+                //if ($damPluginInstalled && $damId = ($data['element']['damId'] ?? null)) {
+
+                //}
+
+
+                //                if ($damPluginInstalled && $damId = ($data['element']['damId'] ?? null)) {
 //
 //                    // Get the metadata from the DAM, with correct language
 //                    throw new \Exception($damId);
@@ -222,24 +227,13 @@ class Import extends \craft\base\Component
 
                 // Make sure we have a folder
                 if (!$folderId) {
-                    $rootFolder = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
-                    $folderTree = $data['element']['folders'] ?? [];
-                    if (empty($folderTree)) {
+                    if (!$folderPath) {
+                        $rootFolder = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
                         $folderId = $rootFolder->id;
                     } else {
-                        $folderTree = \array_reverse($folderTree);
-                        $parentFolder = $rootFolder;
-                        foreach ($folderTree as $folderData) {
-                            $folderPath = $folderData['path'];
-                            $folderName = $folderData['name'];
-                            $folder = new VolumeFolder();
-                            $folder->volumeId = $volume->id;
-                            $folder->parentId = $parentFolder->id;
-                            $folder->path = $folderPath;
-                            $folder->name = $folderName;
-                            Craft::$app->getAssets()->createFolder($folder);
-                            $folderId = $folder->id;
-                            $parentFolder = $folder;
+                        $folderId = Craft::$app->getAssets()->ensureFolderByFullPathAndVolume($folderPath, $volume, true);
+                        if (!$folderId) {
+                            throw new \Exception("Unable to create the folder \"{$folderPath}\" in the \"{$volume->handle}\" volume");
                         }
                     }
                 }
@@ -436,6 +430,7 @@ class Import extends \craft\base\Component
         $asset->volumeId = $volume->id;
         $asset->filename = $data['attributes']['filename'];
         $asset->avoidFilenameConflicts = true;
+        $asset->focalPoint = $data['attributes']['focalPoint'] ?? ['x' => 0.5, 'y' => 0.5];
         $asset->setScenario(Asset::SCENARIO_CREATE);
 
         return $asset;

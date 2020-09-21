@@ -68,7 +68,7 @@ class ExportImport extends Plugin
         });
 
         Craft::$app->getView()->hook('cp.entries.edit.meta', function (array $context) {
-            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/edit-form-ui', $context);
+            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
         });
 
         // Register services
