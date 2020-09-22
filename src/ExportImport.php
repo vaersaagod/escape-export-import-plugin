@@ -12,14 +12,17 @@ use craft\events\RegisterElementActionsEvent;
 use craft\events\RegisterTemplateRootsEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\web\twig\variables\Cp;
+use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
 
 use escape\exportimport\elements\actions\DownloadExportElementsJson;
 use escape\exportimport\elements\actions\CopyExportElementsUrl;
+use escape\exportimport\models\Settings;
 use escape\exportimport\services\Export;
 use escape\exportimport\services\Import;
 
+use escape\exportimport\web\twig\variables\ExportImportVariable;
 use yii\base\Event;
 use yii\base\Module;
 
@@ -38,6 +41,8 @@ class ExportImport extends Plugin
     public function init()
     {
 
+        parent::init();
+
         // Define a custom alias named after the namespace
         Craft::setAlias('@modules', dirname(__DIR__));
         Craft::setAlias('@exportimport', __DIR__);
@@ -48,8 +53,6 @@ class ExportImport extends Plugin
         } else {
             $this->controllerNamespace = 'escape\\exportimport\\controllers';
         }
-
-        parent::init();
 
         Event::on(
             Cp::class,
@@ -77,14 +80,38 @@ class ExportImport extends Plugin
             'import' => Import::class,
         ]);
 
+        // Register template variables
+        Event::on(
+            CraftVariable::class,
+            CraftVariable::EVENT_INIT,
+            function (Event $event) {
+                $variable = $event->sender;
+                $variable->set('escapeExportImport', ExportImportVariable::class);
+            }
+        );
+
         Event::on(
             Entry::class,
             Element::EVENT_REGISTER_ACTIONS,
             function (RegisterElementActionsEvent $event) {
-                $event->actions[] = new CopyExportElementsUrl();
-                $event->actions[] = new DownloadExportElementsJson();
+                $source = $event->source;
+                if (ExportImport::getInstance()->export->getIsSourceExportable($source)) {
+                    $event->actions[] = new CopyExportElementsUrl();
+                    //$event->actions[] = new DownloadExportElementsJson();
+                }
             }
         );
+
+    }
+
+    // Protected Methods
+    // =========================================================================
+    /**
+     * @return Settings
+     */
+    protected function createSettingsModel()
+    {
+        return new Settings();
     }
 
 }

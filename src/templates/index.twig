@@ -4,7 +4,8 @@
 {% import "_includes/forms" as _forms %}
 
 {% set title = 'Import' %}
-{% set tabs = {
+
+{#% set tabs = {
     url: {
         label: 'Import from URL',
         url: cpUrl('import/url')
@@ -13,9 +14,9 @@
         label: 'Import from file',
         url: cpUrl('import/file')
     }
-} %}
+} %#}
 
-{% set selectedTab = actionSlug ?? 'url' %}
+{#  % set selectedTab = actionSlug ?? 'url' %#}
 
 {% set content %}
 
@@ -29,7 +30,7 @@
 
             {% if actionSlug == 'file' %}
 
-                <h2>Import data from JSON export</h2>
+                <h2>Import elements from JSON export</h2>
 
                 {{ _forms.fileField({
                     label: 'JSON file',
@@ -38,7 +39,7 @@
 
             {% else %}
 
-                <h2>Import data from URL</h2>
+                <h2>Import elements from URL</h2>
 
                 {{ _forms.textField({
                     label: 'Import URL',

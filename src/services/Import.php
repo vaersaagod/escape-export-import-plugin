@@ -3,6 +3,7 @@
 namespace escape\exportimport\services;
 
 use Craft;
+use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\base\Field;
 use craft\base\VolumeInterface;
@@ -14,11 +15,15 @@ use craft\fields\BaseRelationField;
 use craft\fields\Matrix;
 use craft\helpers\Db;
 use craft\helpers\ElementHelper;
+use craft\helpers\Html;
 use craft\helpers\Json;
+use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\models\MatrixBlockType;
 use craft\models\VolumeFolder;
 use craft\redactor\Field as RedactorField;
+use craft\validators\HandleValidator;
+use escape\escapedam\EscapeDam;
 use escape\exportimport\helpers\FileHelper;
 use verbb\supertable\fields\SuperTableField;
 use verbb\supertable\models\SuperTableBlockTypeModel;
@@ -83,6 +88,18 @@ class Import extends \craft\base\Component
 
     }
 
+    /**
+     * @param ElementInterface $element
+     * @param array $fieldValues
+     * @param string $context
+     * @return array
+     * @throws \Throwable
+     * @throws \craft\errors\ElementNotFoundException
+     * @throws \craft\errors\SiteNotFoundException
+     * @throws \craft\errors\VolumeException
+     * @throws \yii\base\Exception
+     * @throws \yii\db\Exception
+     */
     protected function normalizeFieldValues(ElementInterface $element, array $fieldValues, string $context = 'global'): array
     {
 
@@ -105,11 +122,7 @@ class Import extends \craft\base\Component
 
             } else if ($field instanceof Assets) {
 
-                if (!$this->includeAssets) {
-                    $fieldValue = [];
-                } else {
-                    $fieldValue = $this->normalizeAssetsFieldValue($element, $field, $fieldValue);
-                }
+                $fieldValue = $this->normalizeAssetsFieldValue($element, $field, $fieldValue);
 
             } else if ($field instanceof RedactorField) {
 
@@ -135,12 +148,32 @@ class Import extends \craft\base\Component
      */
     protected function normalizeRedactorFieldValue(ElementInterface $element, RedactorField $field, $fieldValue)
     {
+        if ($fieldValue) {
+            $fieldValue = $this->stripRefsFromRedactorFieldValue($field, $fieldValue);
+            $fieldValue = $field->normalizeValue($fieldValue);
+        }
+
         return $fieldValue;
     }
 
-
+    /**
+     * @param ElementInterface $element
+     * @param Assets $field
+     * @param $fieldValue
+     * @return array
+     * @throws \Throwable
+     * @throws \craft\errors\ElementNotFoundException
+     * @throws \craft\errors\SiteNotFoundException
+     * @throws \craft\errors\VolumeException
+     * @throws \yii\base\Exception
+     * @throws \yii\db\Exception
+     */
     protected function normalizeAssetsFieldValue(ElementInterface $element, Assets $field, $fieldValue): array
     {
+
+        if (!$this->includeAssets) {
+            return [];
+        }
 
         $sourceSite = $this->sourceSite ?? [];
         $sourceSiteUrl = $sourceSite['baseUrl'] ?? null;
@@ -177,79 +210,85 @@ class Import extends \craft\base\Component
                     continue;
                 }
 
-                // Identify the volume
-                $volumeHandle = $data['element']['volume'] ?? null;
-                if (!$volumeHandle || !$volume = Craft::$app->getVolumes()->getVolumeByHandle($volumeHandle)) {
-                    throw new \Exception("Invalid volume handle \"{$volumeHandle}\"");
-                }
+                $asset = null;
 
-                // Check to see if we have this Asset locally already
-                $filename = $data['attributes']['filename'];
-                $folderPath = $data['attributes']['folderPath'];
-                $folderId = $volume->folderExists($folderPath) ? $this->getFolderIdByVolumeIdAndFolderPath($volume->id, $folderPath) : null;
+                // Is the image from the DAM?
+                $damData = $data['element']['damData'] ?? [];
+                $damId = (int)($damData['id'] ?? null);
 
-                if ($folderId) {
+                if ($damPluginInstalled && $damId) {
+
+                    $asset = EscapeDam::getInstance()->files->importFile($damId, $field->id, $element->id, $element->siteId);
+
+                } else {
+
+                    // Not from DAM, download and create Asset
+                    $volumeHandle = $data['element']['volume'] ?? null;
+                    /** @var VolumeInterface $volume */
+                    if (!$volumeHandle || !$volume = Craft::$app->getVolumes()->getVolumeByHandle($volumeHandle)) {
+                        throw new \Exception("Invalid volume handle \"{$volumeHandle}\"");
+                    }
+
+                    // Make sure that the folder exists and that we have a folderId
+                    $folderPath = $data['attributes']['folderPath'];
+                    if (!$folderPath) {
+                        // No folder path – use the root folder
+                        $folder = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
+                        $folderId = $folder->id;
+                    } else if ($volume->folderExists($folderPath)) {
+                        $folderId = $this->getFolderIdByVolumeIdAndFolderPath($volume->id, $folderPath);
+                    } else {
+                        $folderId = Craft::$app->getAssets()->ensureFolderByFullPathAndVolume($folderPath, $volume, true);
+                    }
+
+                    if (!$folderId || !$folder = Craft::$app->getAssets()->findFolder(['id' => (int)$folderId])) {
+                        throw new \Exception('Invalid folder');
+                    }
+
+                    // Check to see if we have this Asset locally already
+                    $filename = $data['attributes']['filename'];
                     $kind = $data['attributes']['kind'];
-                    $localAsset = Asset::find()
+
+                    $asset = Asset::find()
                         ->volumeId($volume->id)
                         ->folderId($folderId)
                         ->filename($filename)
                         ->kind($kind)
                         ->one();
-                    if ($localAsset) {
-                        // Found a local asset. Skip the rest
-                        $fieldValue[] = $localAsset->id;
+
+                    if ($asset) {
+                        // Sweet, this Asset already exists! Skip the rest
+                        $fieldValue[] = $asset->id;
                         continue;
                     }
-                }
-                
-                // Have to download the file!
-                //if ($damPluginInstalled && $damId = ($data['element']['damId'] ?? null)) {
 
-                //}
+                    // Have to download the file
+                    $sourceFileUrl = UrlHelper::urlWithParams("{$sourceSiteUrl}/actions/escape-exportimport/files", ['assetId' => $assetId]);
+                    $tempPath = FileHelper::getTempPath();
+                    FileHelper::downloadFile($sourceFileUrl, $tempPath);
 
-
-                //                if ($damPluginInstalled && $damId = ($data['element']['damId'] ?? null)) {
-//
-//                    // Get the metadata from the DAM, with correct language
-//                    throw new \Exception($damId);
-//
-//                }
-
-                // Download the file to a temp path
-                $sourceFileUrl = UrlHelper::urlWithParams("{$sourceSiteUrl}/actions/escape-exportimport/files", ['assetId' => $assetId]);
-                $tempPath = FileHelper::getTempPath();
-                FileHelper::downloadFile($sourceFileUrl, $tempPath);
-
-                if (!\file_exists($tempPath) || !\is_file($tempPath)) {
-                    continue;
-                }
-
-                // Make sure we have a folder
-                if (!$folderId) {
-                    if (!$folderPath) {
-                        $rootFolder = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
-                        $folderId = $rootFolder->id;
-                    } else {
-                        $folderId = Craft::$app->getAssets()->ensureFolderByFullPathAndVolume($folderPath, $volume, true);
-                        if (!$folderId) {
-                            throw new \Exception("Unable to create the folder \"{$folderPath}\" in the \"{$volume->handle}\" volume");
-                        }
+                    if (!\file_exists($tempPath) || !\is_file($tempPath)) {
+                        throw new \Exception('Unable to download remote file');
                     }
+
+                    // Create the Asset
+                    $asset = $this->getAssetModel($data, $volume);
+                    $asset->tempFilePath = $tempPath;
+                    $asset->newFolderId = $folderId;
+
+                    // Set custom fields
+                    $fields = $this->normalizeFieldValues($element, $data['fields'] ?? []);
+                    $asset->setFieldValues($fields);
+
+                    Craft::$app->getElements()->saveElement($asset);
+
                 }
 
-                // Create the Asset
-                $asset = $this->getAssetModel($data, $volume);
-                $asset->tempFilePath = $tempPath;
-                $asset->newFolderId = $folderId;
-
-                // Set custom fields
-                $fields = $this->normalizeFieldValues($element, $data['fields'] ?? []);
-                $asset->setFieldValues($fields);
-
-                if (Craft::$app->getElements()->saveElement($asset)) {
-                    $fieldValue[] = $asset->id;
+                if (!$asset || !$asset->id) {
+                    throw new \Exception('Unable to save Asset');
                 }
+
+                $fieldValue[] = $asset->id;
 
             } catch (\Exception $e) {
                 Craft::error($e->getMessage(), __METHOD__);
@@ -354,6 +393,17 @@ class Import extends \craft\base\Component
             ->where('volumefolders.volumeId=:volumeId', [':volumeId' => $volumeId])
             ->andWhere('volumefolders.path=:folderPath', [':folderPath' => $folderPath])
             ->scalar();
+    }
+
+    protected function stripRefsFromRedactorFieldValue(RedactorField $field, $fieldValue)
+    {
+        if (!StringHelper::contains($fieldValue, '{')) {
+            return $fieldValue;
+        }
+
+        return \preg_replace_callback('/(href=|src=)([\'"])(\{([\w\\\\]+\:\d+(?:@\d+)?\:(?:transform\:)?' . HandleValidator::$handlePattern . ')(?:\|\|[^\}]+)?\})(?:\?([^\'"#]*))?(#[^\'"#]+)?\2/', function($matches) {
+            return '';
+        }, $fieldValue);
     }
 
     /**

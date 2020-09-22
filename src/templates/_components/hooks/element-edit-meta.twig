@@ -1,7 +1,7 @@
 {% import '_includes/forms' as _forms %}
 
 {% set element = element ?? null %}
-{% if element and element.id and not element.draftId|default and not element.revisionId|default %}
+{% if element and craft.escapeExportImport.isElementExportable(element) %}
     <div class="data">
         <h5 class="heading">Export URL</h5>
         <div class="value">
