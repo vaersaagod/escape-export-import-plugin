@@ -53,10 +53,19 @@ class Import extends \craft\base\Component
      * @return bool
      * @throws \Throwable
      * @throws \craft\errors\ElementNotFoundException
+     * @throws \craft\errors\OperationAbortedException
+     * @throws \craft\errors\SiteNotFoundException
+     * @throws \craft\errors\VolumeException
      * @throws \yii\base\Exception
+     * @throws \yii\db\Exception
      */
     public function importElement(array $data, bool $enabled = false, bool $includeAssets = true): bool
     {
+
+        $currentUser = Craft::$app->getUser()->getIdentity();
+        if (!$currentUser || !$currentUser->can('escape-exportimport:import')) {
+            throw new \Exception('User doesn\'t have the neccessary permissions to import elements');
+        }
 
         $this->sourceSite = $data['site'];
         $this->includeAssets = $includeAssets;
@@ -185,7 +194,7 @@ class Import extends \craft\base\Component
         $sourceSiteId = $sourceSite['siteId'] ?? null;
         $assetIds = $fieldValue ?: [];
         $fieldValue = [];
-        
+
         $damPluginInstalled = !!Craft::$app->getPlugins()->getPlugin('escapedam');
 
         foreach ($assetIds as $assetId) {

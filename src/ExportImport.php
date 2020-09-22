@@ -11,12 +11,15 @@ use craft\events\RegisterCpNavItemsEvent;
 use craft\events\RegisterElementActionsEvent;
 use craft\events\RegisterTemplateRootsEvent;
 use craft\events\RegisterUrlRulesEvent;
+use craft\events\RegisterUserPermissionsEvent;
+use craft\services\Plugins;
+use craft\services\UserPermissions;
 use craft\web\twig\variables\Cp;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
 
-use escape\exportimport\elements\actions\DownloadExportElementsJson;
+//use escape\exportimport\elements\actions\DownloadExportElementsJson;
 use escape\exportimport\elements\actions\CopyExportElementsUrl;
 use escape\exportimport\models\Settings;
 use escape\exportimport\services\Export;
@@ -54,22 +57,6 @@ class ExportImport extends Plugin
             $this->controllerNamespace = 'escape\\exportimport\\controllers';
         }
 
-        Event::on(
-            Cp::class,
-            Cp::EVENT_REGISTER_CP_NAV_ITEMS,
-            function(RegisterCpNavItemsEvent $event) {
-                $event->navItems[] = [
-                    'url' => 'import/url',
-                    'label' => Craft::t('site', 'Import'),
-                    'icon' => '@exportimport/icon.svg',
-                ];
-            }
-        );
-
-        Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function (RegisterUrlRulesEvent $event) {
-            $event->rules['import/<actionSlug:{slug}>'] = ['template' => 'escape-exportimport/index'];
-        });
-
         Craft::$app->getView()->hook('cp.entries.edit.meta', function (array $context) {
             return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
         });
@@ -90,6 +77,7 @@ class ExportImport extends Plugin
             }
         );
 
+        // Register element actions
         Event::on(
             Entry::class,
             Element::EVENT_REGISTER_ACTIONS,
@@ -102,10 +90,61 @@ class ExportImport extends Plugin
             }
         );
 
+        // Register CP permissions
+        Event::on(
+            UserPermissions::class,
+            UserPermissions::EVENT_REGISTER_PERMISSIONS,
+            function (RegisterUserPermissionsEvent $event) {
+                $event->permissions['Escape Export & Import'] = $this->getCpPermissions();
+            }
+        );
+
+        // Register CP route and nav item
+        // We wrap this in a Plugins::EVENT_AFTER_LOAD_PLUGINS event handler because we need to check the user's permissions for this
+        Event::on(
+            Plugins::class,
+            Plugins::EVENT_AFTER_LOAD_PLUGINS,
+            function () {
+                $currentUser = Craft::$app->getUser()->getIdentity();
+                if (!$currentUser || !$currentUser->can('escape-exportimport:import')) {
+                    return;
+                }
+                Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function (RegisterUrlRulesEvent $event) {
+                    $event->rules['import/<actionSlug:{slug}>'] = ['template' => 'escape-exportimport/index'];
+                });
+
+                Event::on(
+                    Cp::class,
+                    Cp::EVENT_REGISTER_CP_NAV_ITEMS,
+                    function(RegisterCpNavItemsEvent $event) {
+                        $event->navItems[] = [
+                            'url' => 'import/url',
+                            'label' => Craft::t('site', 'Import'),
+                            'icon' => '@exportimport/icon.svg',
+                        ];
+                    }
+                );
+            }
+        );
+
     }
 
     // Protected Methods
     // =========================================================================
+    /**
+     * Returns the custom Control Panel user permissions.
+     *
+     * @return array
+     */
+    protected function getCpPermissions(): array
+    {
+        return [
+            'escape-exportimport:import' => [
+                'label' => 'Import elements',
+            ],
+        ];
+    }
+
     /**
      * @return Settings
      */
