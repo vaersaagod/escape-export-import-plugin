@@ -19,13 +19,21 @@ use yii\web\Response;
 class ImportController extends \craft\web\Controller
 {
 
+    /**
+     * @return Response|null
+     * @throws BadRequestHttpException
+     * @throws \craft\errors\MissingComponentException
+     * @throws \yii\web\ForbiddenHttpException
+     */
     public function actionIndex()
     {
+
         $this->requirePostRequest();
+
+        $this->requirePermission('escape-exportimport:import');
 
         $enableElements = !!Craft::$app->getRequest()->getRequiredBodyParam('enableElements');
         $includeAssets = !!Craft::$app->getRequest()->getRequiredBodyParam('includeAssets');
-
         $elementsJsonUrl = Craft::$app->getRequest()->getBodyParam('elementsJsonUrl', null);
 
         if ($elementsJsonUrl !== null) {
@@ -88,10 +96,13 @@ class ImportController extends \craft\web\Controller
             $elementsToImport[] = $elementToMaybeImport;
         }
 
+        $authorId = (int)Craft::$app->getUser()->getIdentity()->id;
+
         Craft::$app->getQueue()->push(new ImportElementsJob([
+            'authorId' => $authorId,
             'enableElements' => $enableElements,
-            'includeAssets' => $includeAssets,
             'data' => $elementsToImport,
+            'includeAssets' => $includeAssets,
         ]));
 
         $numElementsToImport = \count($elementsToImport);

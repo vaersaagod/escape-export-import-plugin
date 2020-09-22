@@ -10,6 +10,7 @@ use craft\base\VolumeInterface;
 use craft\db\Query;
 use craft\elements\Asset;
 use craft\elements\Entry;
+use craft\elements\User;
 use craft\fields\Assets;
 use craft\fields\BaseRelationField;
 use craft\fields\Matrix;
@@ -41,6 +42,9 @@ class Import extends \craft\base\Component
     /** @var array|null */
     protected $sourceSite;
 
+    /** @var User|null */
+    protected $author;
+
     /** @var bool */
     protected $includeAssets = true;
 
@@ -59,16 +63,16 @@ class Import extends \craft\base\Component
      * @throws \yii\base\Exception
      * @throws \yii\db\Exception
      */
-    public function importElement(array $data, bool $enabled = false, bool $includeAssets = true): bool
+    public function importElement(array $data, int $authorId, bool $enabled = false, bool $includeAssets = true): bool
     {
-
-        $currentUser = Craft::$app->getUser()->getIdentity();
-        if (!$currentUser || !$currentUser->can('escape-exportimport:import')) {
-            throw new \Exception('User doesn\'t have the neccessary permissions to import elements');
-        }
 
         $this->sourceSite = $data['site'];
         $this->includeAssets = $includeAssets;
+
+        $this->author = Craft::$app->getUsers()->getUserById($authorId);
+        if (!$this->author) {
+            throw new \Exception('Invalid author ID');
+        }
 
         $elementType = $data['element']['elementType'] ?? null;
 
@@ -443,16 +447,10 @@ class Import extends \craft\base\Component
             throw new \Exception("Invalid entry type \"{$entryTypeHandle}\"");
         }
 
-        // Ensure user has neccessary permission
-        $user = Craft::$app->getUser()->getIdentity();
-        if (!$user->can("createEntries:{$section->uid}")) {
-            throw new \Exception("User doesn\'t have the neccessary permissions to create entries in the \"{$sectionHandle}\" section");
-        }
-
         $entry = new Entry();
+        $entry->authorId = $this->author->id;
         $entry->sectionId = $section->id;
         $entry->typeId = $entryType->id;
-        $entry->authorId = $user->id;
         $entry->title = $data['attributes']['title'];
         $entry->slug = $data['attributes']['slug'];
         $entry->postDate = new \DateTime(date('Y-m-d H:i:s', strtotime($data['attributes']['postDate'])));
@@ -478,22 +476,14 @@ class Import extends \craft\base\Component
      */
     protected function getAssetModel(array $data, VolumeInterface $volume): Asset
     {
-
-        // Ensure user has neccessary permission
-        $user = Craft::$app->getUser()->getIdentity();
-        if (!$user->can("saveAssetInVolume:{$volume->uid}")) {
-            throw new \Exception("User doesn\'t have the neccessary permissions to upload assets in the \"{$volumeHandle}\" volume");
-        }
-
         $asset = new Asset();
+        $asset->uploaderId = $this->author->id;
         $asset->volumeId = $volume->id;
         $asset->filename = $data['attributes']['filename'];
         $asset->avoidFilenameConflicts = true;
         $asset->focalPoint = $data['attributes']['focalPoint'] ?? ['x' => 0.5, 'y' => 0.5];
         $asset->setScenario(Asset::SCENARIO_CREATE);
-
         return $asset;
-
     }
 
 }

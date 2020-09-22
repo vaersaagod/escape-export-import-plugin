@@ -16,14 +16,17 @@ use yii\queue\RetryableJobInterface;
 class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInterface
 {
 
+    /** @var int|null */
+    public $authorId;
+
     /** @var bool */
     public $enableElements = false;
 
-    /** @var bool */
-    public $includeAssets = true;
-
     /** @var array|null */
     public $data;
+
+    /** @var bool */
+    public $includeAssets = true;
 
     /**
      * @return int
@@ -66,7 +69,7 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
 
             $count++;
 
-            ExportImport::getInstance()->import->importElement($rawElement, $this->enableElements, $this->includeAssets);
+            ExportImport::getInstance()->import->importElement($rawElement, $this->authorId, $this->enableElements, $this->includeAssets);
         }
 
     }
