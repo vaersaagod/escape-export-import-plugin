@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## 1.1.3 - 2020-09-22
+
+### Fixed
+- Fixes an issue where DAM imports would fail in console requests, because the user wasn't authenticated
+
+## 1.1.2 - 2020-09-22
+
+### Fixed  
+- Fixes an issue where the user/author was not identified in console requests
+
 ## 1.1.1 - 2020-09-22
 
 ### Fixed

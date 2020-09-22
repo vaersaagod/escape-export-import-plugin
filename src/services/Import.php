@@ -231,7 +231,7 @@ class Import extends \craft\base\Component
 
                 if ($damPluginInstalled && $damId) {
 
-                    $asset = EscapeDam::getInstance()->files->importFile($damId, $field->id, $element->id, $element->siteId);
+                    $asset = EscapeDam::getInstance()->files->importFile($damId, $field->id, $element->id, $element->siteId, null, $this->author->id);
 
                 } else {
 
