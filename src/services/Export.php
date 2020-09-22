@@ -5,6 +5,7 @@ namespace escape\exportimport\services;
 use Craft;
 
 use craft\base\ElementInterface;
+use craft\elements\Asset;
 use craft\elements\Entry;
 use craft\helpers\ElementHelper;
 use escape\exportimport\ExportImport;
@@ -39,6 +40,8 @@ class Export extends \craft\base\Component
                 /** @var Entry $element */
                 $exportableSections = $settings->exportableSections ?? [];
                 return \in_array($element->getSection()->handle, $exportableSections);
+            case Asset::class:
+                return true;
         }
 
         return false;
