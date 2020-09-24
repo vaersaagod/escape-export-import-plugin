@@ -8,6 +8,7 @@ use craft\base\ElementInterface;
 use craft\elements\Asset;
 use craft\elements\Entry;
 use craft\helpers\ElementHelper;
+use craft\helpers\StringHelper;
 use escape\exportimport\ExportImport;
 use escape\exportimport\transformers\ElementTransformer;
 
@@ -54,15 +55,21 @@ class Export extends \craft\base\Component
     public function getIsSourceExportable(string $key): bool
     {
 
-        $temp = \explode(':', $key);
-        $sourceType = $temp[0] ?? null;
-        $sourceUid = $temp[1] ?? null;
-
-        if (!$sourceType || !$sourceUid) {
+        $temp = \explode('/', $key);
+        $temp = [0] ?? null;
+        if (!$temp) {
             return false;
         }
 
-        if (!\in_array($sourceType, self::EXPORTABLE_SOURCE_TYPES)) {
+        $temp = \explode(':', $key);
+        $sourceType = $temp[0] ?? null;
+
+        if (!$sourceType || !\in_array($sourceType, self::EXPORTABLE_SOURCE_TYPES)) {
+            return false;
+        }
+
+        $sourceUid = $temp[1] ?? null;
+        if (!$sourceUid || !StringHelper::isUUID($sourceUid)) {
             return false;
         }
 
@@ -71,6 +78,9 @@ class Export extends \craft\base\Component
         switch ($sourceType) {
             case 'section':
                 $section = Craft::$app->getSections()->getSectionByUid($sourceUid);
+                if (!$section) {
+                    return false;
+                }
                 return \in_array($section->handle, $settings->exportableSections ?? []);
         }
 
@@ -82,6 +92,7 @@ class Export extends \craft\base\Component
      * @param int|null $siteId
      * @return array
      * @throws \craft\errors\SiteNotFoundException
+     * @throws \yii\base\InvalidConfigException
      */
     public function getElementDataById(int $elementId, int $siteId = null): array
     {

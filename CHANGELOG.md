@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## 1.1.4 - 2020-09-24
+
+### Fixed
+- Fixes an issue where Export/Import would break nested entry sources  
+
 ## 1.1.3 - 2020-09-22
 
 ### Fixed
