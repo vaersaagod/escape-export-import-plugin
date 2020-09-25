@@ -230,10 +230,10 @@ class Import extends \craft\base\Component
                 $damId = (int)($damData['id'] ?? null);
 
                 if ($damPluginInstalled && $damId) {
-
                     $asset = EscapeDam::getInstance()->files->importFile($damId, $field->id, $element->id, $element->siteId, null, $this->author->id);
+                }
 
-                } else {
+                if (!$asset) {
 
                     // Not from DAM, download and create Asset
                     $volumeHandle = $data['element']['volume'] ?? null;

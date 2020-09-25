@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## 1.1.5 - 2020-09-25
+
+### Improved
+- Import sequence for assets now fall back to regular download if a DAM image couldn't be downloaded  
+
 ## 1.1.4 - 2020-09-24
 
 ### Fixed
