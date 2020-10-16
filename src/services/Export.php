@@ -6,10 +6,12 @@ use Craft;
 
 use craft\base\ElementInterface;
 use craft\elements\Asset;
+use craft\elements\Category;
 use craft\elements\Entry;
 use craft\helpers\ElementHelper;
 use craft\helpers\StringHelper;
 use escape\exportimport\ExportImport;
+use escape\exportimport\models\Settings;
 use escape\exportimport\transformers\ElementTransformer;
 
 /**
@@ -20,7 +22,7 @@ class Export extends \craft\base\Component
 {
 
     /** @var string[] */
-    const EXPORTABLE_SOURCE_TYPES = ['section'];
+    const EXPORTABLE_SOURCE_TYPES = ['section', 'group'];
 
     /**
      * @param ElementInterface $element
@@ -34,6 +36,7 @@ class Export extends \craft\base\Component
             return false;
         }
 
+        /** @var Settings $settings */
         $settings = ExportImport::getInstance()->getSettings();
 
         switch (\get_class($element)) {
@@ -43,6 +46,10 @@ class Export extends \craft\base\Component
                 return \in_array($element->getSection()->handle, $exportableSections);
             case Asset::class:
                 return true;
+            case Category::class:
+                /** @var Category $element */
+                $exportableCategoryGroups = $settings->exportableCategoryGroups ?? [];
+                return \in_array($element->getGroup()->handle, $exportableCategoryGroups);
         }
 
         return false;
@@ -82,6 +89,12 @@ class Export extends \craft\base\Component
                     return false;
                 }
                 return \in_array($section->handle, $settings->exportableSections ?? []);
+            case 'group':
+                $categoryGroup = Craft::$app->getCategories()->getGroupByUid($sourceUid);
+                if (!$categoryGroup) {
+                    return false;
+                }
+                return \in_array($categoryGroup->handle, $settings->exportableCategoryGroups ?? []);
         }
 
         return false;

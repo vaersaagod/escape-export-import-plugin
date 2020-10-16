@@ -6,6 +6,7 @@ use Craft;
 
 use craft\base\Element;
 use craft\base\Plugin;
+use craft\elements\Category;
 use craft\elements\Entry;
 use craft\events\RegisterCpNavItemsEvent;
 use craft\events\RegisterElementActionsEvent;
@@ -57,10 +58,6 @@ class ExportImport extends Plugin
             $this->controllerNamespace = 'escape\\exportimport\\controllers';
         }
 
-        Craft::$app->getView()->hook('cp.entries.edit.meta', function (array $context) {
-            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
-        });
-
         // Register services
         $this->setComponents([
             'export' => Export::class,
@@ -89,6 +86,26 @@ class ExportImport extends Plugin
                 }
             }
         );
+
+        Event::on(
+            Category::class,
+            Element::EVENT_REGISTER_ACTIONS,
+            function (RegisterElementActionsEvent $event) {
+                $source = $event->source;
+                if (ExportImport::getInstance()->export->getIsSourceExportable($source)) {
+                    $event->actions[] = new CopyExportElementsUrl();
+                    //$event->actions[] = new DownloadExportElementsJson();
+                }
+            }
+        );
+
+        // Hooks
+        Craft::$app->getView()->hook('cp.entries.edit.meta', function (array $context) {
+            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
+        });
+        Craft::$app->getView()->hook('cp.categories.edit.details', function (array $context) {
+            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
+        });
 
         // Register CP permissions
         Event::on(

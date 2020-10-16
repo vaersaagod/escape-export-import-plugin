@@ -6,6 +6,7 @@ use Craft;
 use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\elements\Asset;
+use craft\elements\Category;
 use craft\elements\Entry;
 
 use escape\escapedam\EscapeDam;
@@ -57,6 +58,10 @@ class ElementTransformer extends TransformerAbstract
                 $damAsset = EscapeDam::getInstance()->files->getFileForImportedAsset($element);
                 $elementData['damData'] = $damAsset;
             }
+        } else if ($element instanceof Category) {
+            /** @var Category $element */
+            $categoryGroup = $element->getGroup();
+            $elementData['group'] = $categoryGroup->handle;
         }
 
         return [

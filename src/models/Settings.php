@@ -13,5 +13,8 @@ class Settings extends Model
 
     /** @var string[]|null */
     public $exportableSections;
+
+    /** @var string[]|null */
+    public $exportableCategoryGroups;
 }
 

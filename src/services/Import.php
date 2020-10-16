@@ -9,6 +9,7 @@ use craft\base\Field;
 use craft\base\VolumeInterface;
 use craft\db\Query;
 use craft\elements\Asset;
+use craft\elements\Category;
 use craft\elements\Entry;
 use craft\elements\User;
 use craft\fields\Assets;
@@ -52,6 +53,7 @@ class Import extends \craft\base\Component
      * Import an element based on raw data
      *
      * @param array $data
+     * @param int $authorId
      * @param bool $enabled
      * @param bool $includeAssets
      * @return bool
@@ -74,17 +76,13 @@ class Import extends \craft\base\Component
             throw new \Exception('Invalid author ID');
         }
 
-        $elementType = $data['element']['elementType'] ?? null;
-
-        if ($elementType !== Entry::class) {
-            // Only entries supported, for now
-            throw new \Exception("Element type {$elementType} not supported");
-        }
-
         $element = null;
+        $elementType = $data['element']['elementType'] ?? null;
 
         if ($elementType === Entry::class) {
             $element = $this->getEntryModel($data);
+        } else if ($elementType === Category::class) {
+            $element = $this->getCategoryModel($data);
         }
 
         if (!$element) {
@@ -465,6 +463,34 @@ class Import extends \craft\base\Component
         }
 
         return $entry;
+
+    }
+
+    /**
+     * @param array $data
+     * @return Category
+     * @throws \craft\errors\OperationAbortedException
+     */
+    protected function getCategoryModel(array $data): Category
+    {
+
+        // Get category group
+        $categoryGroupHandle = $data['element']['group'] ?? null;
+        $categoryGroup = $categoryGroupHandle ? Craft::$app->getCategories()->getGroupByHandle($categoryGroupHandle) : null;
+        if (!$categoryGroup) {
+            throw new \Exception("Invalid category group handle \"{$categoryGroupHandle}\"");
+        }
+
+        $category = new Category();
+        $category->groupId = $categoryGroup->id;
+        $category->title = $data['attributes']['title'];
+        $category->slug = $data['attributes']['slug'];
+
+        if ($category::hasUris()) {
+            ElementHelper::setUniqueUri($category);
+        }
+
+        return $category;
 
     }
 

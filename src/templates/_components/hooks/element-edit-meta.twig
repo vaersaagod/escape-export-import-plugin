@@ -1,8 +1,9 @@
 {% import '_includes/forms' as _forms %}
 
-{% set element = element ?? null %}
-{% if element and craft.escapeExportImport.isElementExportable(element) %}
-    <div class="data">
+{% set element = entry ?? category ?? element ?? null %}
+
+{% if element and element.id and craft.escapeExportImport.isElementExportable(element) %}
+    <div class="data" style="margin-bottom: 15px;">
         <h5 class="heading">Export URL</h5>
         <div class="value">
             {{ _forms.copytext({
