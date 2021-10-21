@@ -117,11 +117,11 @@ class Export extends \craft\base\Component
         $element = Craft::$app->getElements()->getElementById($elementId, null, $siteId);
 
         if (!$element) {
-            throw new \Exception('Invalid element ID');
+            throw new \Exception("Element ID $elementId does not exist");
         }
 
         if (!$this->getIsElementExportable($element)) {
-            throw new \Exception('Element is not exportable');
+            throw new \Exception("Element ID $elementId is not exportable");
         }
 
         return (new ElementTransformer())->transform($element);

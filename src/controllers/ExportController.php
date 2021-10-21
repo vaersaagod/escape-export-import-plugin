@@ -3,7 +3,6 @@
 namespace escape\exportimport\controllers;
 
 use Craft;
-use craft\base\Element;
 use craft\helpers\Json;
 
 use escape\exportimport\ExportImport;
@@ -41,14 +40,7 @@ class ExportController extends \craft\web\Controller
             throw new BadRequestHttpException('Invalid site ID');
         }
 
-        $elementIds = Element::find()
-            ->id($this->request->getRequiredParam('elementId'))
-            ->siteId($siteId)
-            ->ids();
-
-        if (empty($elementIds)) {
-            throw new BadRequestHttpException('The element you’re trying to export does not exist');
-        }
+        $elementIds = \explode(',', $this->request->getRequiredParam('elementId'));
 
         $data = [];
 
