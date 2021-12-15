@@ -3,7 +3,7 @@
 namespace escape\exportimport\services;
 
 use Craft;
-use craft\base\Element;
+use craft\base\Component;
 use craft\base\ElementInterface;
 use craft\base\Field;
 use craft\base\VolumeInterface;
@@ -15,18 +15,18 @@ use craft\elements\User;
 use craft\fields\Assets;
 use craft\fields\BaseRelationField;
 use craft\fields\Matrix;
-use craft\helpers\Db;
 use craft\helpers\ElementHelper;
-use craft\helpers\Html;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
+use craft\models\EntryType;
 use craft\models\MatrixBlockType;
-use craft\models\VolumeFolder;
 use craft\redactor\Field as RedactorField;
 use craft\validators\HandleValidator;
+
 use escape\escapedam\EscapeDam;
 use escape\exportimport\helpers\FileHelper;
+
 use verbb\supertable\fields\SuperTableField;
 use verbb\supertable\models\SuperTableBlockTypeModel;
 
@@ -34,20 +34,23 @@ use verbb\supertable\models\SuperTableBlockTypeModel;
  * Class Import
  * @package escape\exportimport\services
  */
-class Import extends \craft\base\Component
+class Import extends Component
 {
 
     /** @var array */
-    protected $memoizedMatrixBlockTypes = [];
+    protected array $memoizedMatrixBlockTypes = [];
 
     /** @var array|null */
-    protected $sourceSite;
+    protected ?array $sourceSite;
 
     /** @var User|null */
-    protected $author;
+    protected ?User $author;
 
     /** @var bool */
-    protected $includeAssets = true;
+    protected bool $includeAssets = true;
+
+    /** @var string|null */
+    protected ?string $targetSource = null;
 
     /**
      * Import an element based on raw data
@@ -56,6 +59,7 @@ class Import extends \craft\base\Component
      * @param int $authorId
      * @param bool $enabled
      * @param bool $includeAssets
+     * @param string|null $targetSource
      * @return bool
      * @throws \Throwable
      * @throws \craft\errors\ElementNotFoundException
@@ -65,7 +69,7 @@ class Import extends \craft\base\Component
      * @throws \yii\base\Exception
      * @throws \yii\db\Exception
      */
-    public function importElement(array $data, int $authorId, bool $enabled = false, bool $includeAssets = true): bool
+    public function importElement(array $data, int $authorId, bool $enabled = false, bool $includeAssets = true, ?string $targetSource = null): bool
     {
 
         $this->sourceSite = $data['site'];
@@ -80,9 +84,9 @@ class Import extends \craft\base\Component
         $elementType = $data['element']['elementType'] ?? null;
 
         if ($elementType === Entry::class) {
-            $element = $this->getEntryModel($data);
+            $element = $this->getEntryModel($data, $targetSource);
         } else if ($elementType === Category::class) {
-            $element = $this->getCategoryModel($data);
+            $element = $this->getCategoryModel($data); // TODO support for target source (category group)
         }
 
         if (!$element) {
@@ -91,9 +95,19 @@ class Import extends \craft\base\Component
 
         $element->enabled = $enabled;
 
+        // Only get custom fields that exist on the created element
+        $customFieldHandles = \array_keys($element->getFieldValues());
+        $fieldValues = $data['fields'];
+        $fieldValuesToUse = \array_reduce(\array_keys($fieldValues), function (array $carry, string $handle) use ($customFieldHandles, $fieldValues) {
+            if (!\in_array($handle, $customFieldHandles)) {
+                return $carry;
+            }
+            $carry[$handle] = $fieldValues[$handle];
+            return $carry;
+        }, []);
+
         // Set custom fields and save it again
-        $fields = $this->normalizeFieldValues($element, $data['fields'] ?? []);
-        $element->setFieldValues($fields);
+        $element->setFieldValues($this->normalizeFieldValues($element, $fieldValuesToUse));
 
         return Craft::$app->getElements()->saveElement($element);
 
@@ -120,7 +134,7 @@ class Import extends \craft\base\Component
 
             $field = Craft::$app->getFields()->getFieldByHandle($fieldHandle, $context);
             if (!$field) {
-                throw new \Exception("Field \"{$fieldHandle}\" not found for context \"{$context}\"");
+                continue;
             }
 
             if ($field instanceof Matrix) {
@@ -406,6 +420,11 @@ class Import extends \craft\base\Component
             ->scalar();
     }
 
+    /**
+     * @param RedactorField $field
+     * @param $fieldValue
+     * @return array|string|string[]|null
+     */
     protected function stripRefsFromRedactorFieldValue(RedactorField $field, $fieldValue)
     {
         if (!StringHelper::contains($fieldValue, '{')) {
@@ -419,30 +438,42 @@ class Import extends \craft\base\Component
 
     /**
      * @param array $data
+     * @param string|null $targetSource
      * @return Entry
      * @throws \craft\errors\OperationAbortedException
      */
-    protected function getEntryModel(array $data): Entry
+    protected function getEntryModel(array $data, ?string $targetSource = null): Entry
     {
 
-        // Get section
-        $sectionHandle = $data['element']['section'] ?? null;
-        $section = $sectionHandle ? Craft::$app->getSections()->getSectionByHandle($sectionHandle) : null;
-        if (!$section) {
-            throw new \Exception("Invalid section handle \"{$sectionHandle}\"");
-        }
-
-        // Get entry type
-        $entryTypeHandle = $data['element']['type'] ?? null;
-        $entryType = null;
-        foreach ($section->getEntryTypes() as $sectionEntryType) {
-            if ($sectionEntryType->handle === $entryTypeHandle) {
-                $entryType = $sectionEntryType;
-                break;
+        if ($targetSource && StringHelper::startsWith($targetSource, 'section:')) {
+            // Get section from target source
+            $temp = \explode(':', $targetSource);
+            $targetSourceUid = $temp[1] ?? '';
+            if (!StringHelper::isUUID($targetSourceUid) || !$section = Craft::$app->getSections()->getSectionByUid($targetSourceUid)) {
+                throw new \Exception("Invalid target section UUID");
             }
-        }
-        if (!$entryType) {
-            throw new \Exception("Invalid entry type \"{$entryTypeHandle}\"");
+            // Get entry type
+            $entryType = ($section->getEntryTypes())[0];
+        } else {
+            // Get section from imported element
+            $sectionHandle = $data['element']['section'] ?? null;
+            $section = $sectionHandle ? Craft::$app->getSections()->getSectionByHandle($sectionHandle) : null;
+            if (!$section) {
+                throw new \Exception("Invalid section handle \"{$sectionHandle}\"");
+            }
+            // Get entry type
+            $entryTypeHandle = $data['element']['type'] ?? null;
+            /** @var EntryType $entryType */
+            $entryType = null;
+            foreach ($section->getEntryTypes() as $sectionEntryType) {
+                if ($sectionEntryType->handle === $entryTypeHandle) {
+                    $entryType = $sectionEntryType;
+                    break;
+                }
+            }
+            if (!$entryType) {
+                throw new \Exception("Invalid entry type \"{$entryTypeHandle}\"");
+            }
         }
 
         $entry = new Entry();

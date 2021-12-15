@@ -48,19 +48,39 @@
                 }) }}
             {% endif %}
 
+            <hr />
+
             {{ _forms.lightswitchField({
                 label: 'Include assets',
-                instructions: 'Attempt to import related Assets from imported elements',
+                instructions: 'Attempt to import related assets (images, etc) from imported elements',
                 name: 'includeAssets',
                 on: includeAssets ?? true
             }) }}
 
             {{ _forms.lightswitchField({
-                label: 'Enable imported elements',
-                instructions: 'Set the status for imported elements',
+                label: 'Status for imported elements',
                 name: 'enableElements',
+                offLabel: 'Disabled',
+                onLabel: 'Enabled',
                 on: enableElements ?? false
             }) }}
+
+            {% set config = craft.app.config.configFromFile('escape-exportimport') %}
+            {% set exportableSections = config.exportableSections|default([]) %}
+            {% set sections = craft.app.sections.allSections|filter(section => section.handle in exportableSections) %}
+
+            {% if sections|length %}
+                {{ _forms.selectField({
+                    label: 'Target section',
+                    name: 'targetSectionId',
+                    instructions: 'By default, imported entries will be saved to the same section they were exported from. If you want imported entries saved to a different section, select it below.',
+                    warning: 'Field layouts can vary between sections. If an imported element uses a field that is not available in the selected target section, any data in that field will not be imported.',
+                    options: [{ value: '', label: 'Same as exported (default)' }]|merge(sections|map(section => {
+                        value: section.id,
+                        label: section.name
+                    }))
+                }) }}
+            {% endif %}
 
             <div class="btngroup">
                 <button type="submit" class="btn submit">Import</button>

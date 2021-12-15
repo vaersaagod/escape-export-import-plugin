@@ -3,6 +3,8 @@
 namespace escape\exportimport\queue\jobs;
 
 use Craft;
+use craft\elements\Category;
+use craft\elements\Entry;
 use craft\helpers\App;
 
 use escape\exportimport\ExportImport;
@@ -28,6 +30,9 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
     /** @var bool */
     public $includeAssets = true;
 
+    /** @var int|null */
+    public $targetSectionId = null;
+
     /**
      * @return int
      */
@@ -47,13 +52,21 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
     }
 
     /**
-     * @inheritdoc
+     * @param $queue
+     * @return mixed|void
+     * @throws \Throwable
+     * @throws \craft\errors\ElementNotFoundException
+     * @throws \craft\errors\OperationAbortedException
+     * @throws \craft\errors\SiteNotFoundException
+     * @throws \craft\errors\VolumeException
+     * @throws \yii\base\Exception
+     * @throws \yii\db\Exception
      */
     public function execute($queue)
     {
         App::maxPowerCaptain();
 
-        if (!$this->data || empty($this->data)) {
+        if (empty($this->data)) {
             return;
         }
 
@@ -62,6 +75,21 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
 
         foreach ($this->data as $rawElement) {
 
+            // Maybe get target source
+            $targetSource = null;
+            if ($this->targetSectionId) {
+                $elementType = $rawElement['element']['elementType'] ?? null;
+                if ($elementType === Entry::class) {
+                    $section = Craft::$app->getSections()->getSectionById($this->targetSectionId);
+                    if (!$section) {
+                        throw new \Exception("Invalid target section ID \"$this->targetSectionId\"");
+                    }
+                    $targetSource = "section:$section->uid";
+                } else if ($elementType === Category::class) {
+                    // TODO support for target category group as source
+                }
+            }
+
             $this->setProgress($queue, $count / $total, Craft::t('app', '{step} of {total}', [
                 'step' => $count + 1,
                 'total' => $total,
@@ -69,7 +97,7 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
 
             $count++;
 
-            ExportImport::getInstance()->import->importElement($rawElement, $this->authorId, $this->enableElements, $this->includeAssets);
+            ExportImport::getInstance()->import->importElement($rawElement, $this->authorId, $this->enableElements, $this->includeAssets, $targetSource);
         }
 
     }

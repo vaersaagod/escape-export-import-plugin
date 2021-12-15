@@ -32,9 +32,10 @@ class ImportController extends \craft\web\Controller
 
         $this->requirePermission('escape-exportimport:import');
 
-        $enableElements = !!Craft::$app->getRequest()->getRequiredBodyParam('enableElements');
-        $includeAssets = !!Craft::$app->getRequest()->getRequiredBodyParam('includeAssets');
-        $elementsJsonUrl = Craft::$app->getRequest()->getBodyParam('elementsJsonUrl', null);
+        $enableElements = !!$this->request->getRequiredBodyParam('enableElements');
+        $includeAssets = !!$this->request->getRequiredBodyParam('includeAssets');
+        $elementsJsonUrl = $this->request->getBodyParam('elementsJsonUrl', null);
+        $targetSectionId = ((int)$this->request->getBodyParam('targetSectionId', 0)) ?: null;
 
         if ($elementsJsonUrl !== null) {
             if (!\filter_var($elementsJsonUrl, FILTER_VALIDATE_URL)) {
@@ -103,6 +104,7 @@ class ImportController extends \craft\web\Controller
             'enableElements' => $enableElements,
             'data' => $elementsToImport,
             'includeAssets' => $includeAssets,
+            'targetSectionId' => $targetSectionId,
         ]));
 
         $numElementsToImport = \count($elementsToImport);
