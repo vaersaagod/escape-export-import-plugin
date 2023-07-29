@@ -20,7 +20,7 @@ class FilesController extends \craft\web\Controller
 {
 
     /** @var string[] */
-    public $allowAnonymous = ['index'];
+    public array|int|bool $allowAnonymous = ['index'];
 
     /**
      * @return bool

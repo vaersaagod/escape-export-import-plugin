@@ -62,7 +62,7 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
      * @throws \yii\base\Exception
      * @throws \yii\db\Exception
      */
-    public function execute($queue)
+    public function execute($queue): void
     {
         App::maxPowerCaptain();
 

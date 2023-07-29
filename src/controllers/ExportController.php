@@ -18,7 +18,7 @@ class ExportController extends \craft\web\Controller
 {
 
     /** @var string[] */
-    public $allowAnonymous = ['index'];
+    public array|int|bool $allowAnonymous = ['index'];
 
     /**
      * Export one or multiple elements to a JSON response or a file

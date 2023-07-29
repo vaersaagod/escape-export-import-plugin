@@ -28,7 +28,7 @@ use escape\escapedam\EscapeDam;
 use escape\exportimport\helpers\FileHelper;
 
 use verbb\supertable\fields\SuperTableField;
-use verbb\supertable\models\SuperTableBlockTypeModel;
+use verbb\supertable\models\SuperTableBlockType;
 
 /**
  * Class Import
@@ -336,7 +336,7 @@ class Import extends Component
     protected function normalizeSuperTableFieldValue(ElementInterface $element, SuperTableField $field, $fieldValue): array
     {
         return \array_map(function (array $block) use ($element, $field) {
-            /** @var SuperTableBlockTypeModel $blockType */
+            /** @var SuperTableBlockType $blockType */
             $blockType = $this->getSuperTableBlockTypeForField($field);
             return \array_merge($block, [
                 'type' => $blockType->id,
@@ -389,16 +389,16 @@ class Import extends Component
 
     /**
      * @param SuperTableField $field
-     * @return SuperTableBlockTypeModel
+     * @return SuperTableBlockType
      * @throws \Exception
      */
-    protected function getSuperTableBlockTypeForField(SuperTableField $field): SuperTableBlockTypeModel
+    protected function getSuperTableBlockTypeForField(SuperTableField $field): SuperTableBlockType
     {
         $blockTypes = $field->getBlockTypes();
         if (empty($blockTypes)) {
             throw new \Exception("Unable to get block type for Super Table field \"{$field->handle}\"");
         }
-        /** @var SuperTableBlockTypeModel $blockType */
+        /** @var SuperTableBlockType $blockType */
         $blockType = $blockTypes[0];
         return $blockType;
     }

@@ -8,6 +8,7 @@ use craft\base\Element;
 use craft\base\Plugin;
 use craft\elements\Category;
 use craft\elements\Entry;
+use craft\events\DefineHtmlEvent;
 use craft\events\RegisterCpNavItemsEvent;
 use craft\events\RegisterElementActionsEvent;
 use craft\events\RegisterTemplateRootsEvent;
@@ -20,13 +21,12 @@ use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
 
-//use escape\exportimport\elements\actions\DownloadExportElementsJson;
 use escape\exportimport\elements\actions\CopyExportElementsUrl;
 use escape\exportimport\models\Settings;
 use escape\exportimport\services\Export;
 use escape\exportimport\services\Import;
-
 use escape\exportimport\web\twig\variables\ExportImportVariable;
+
 use yii\base\Event;
 use yii\base\Module;
 
@@ -64,6 +64,19 @@ class ExportImport extends Plugin
             'import' => Import::class,
         ]);
 
+        // Defer most setup tasks until Craft is fully initialized
+        Craft::$app->onInit(function () {
+            $this->attachEventHandlers();
+            // ...
+        });
+
+    }
+
+    // Protected Methods
+    // =========================================================================
+
+    protected function attachEventHandlers(): void
+    {
         // Register template variables
         Event::on(
             CraftVariable::class,
@@ -99,13 +112,42 @@ class ExportImport extends Plugin
             }
         );
 
-        // Hooks
-        Craft::$app->getView()->hook('cp.entries.edit.meta', function (array $context) {
-            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
-        });
-        Craft::$app->getView()->hook('cp.categories.edit.details', function (array $context) {
-            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
-        });
+        Event::on(
+            Entry::class,
+            Element::EVENT_DEFINE_META_FIELDS_HTML,
+            static function (DefineHtmlEvent $event) {
+                if ($event->static) {
+                    return;
+                }
+                /** @var Entry $element */
+                $entry = $event->sender;
+                $event->html .= Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', [
+                    'entry' => $entry,
+                ]);
+            }
+        );
+
+        Event::on(
+            Category::class,
+            Element::EVENT_DEFINE_META_FIELDS_HTML,
+            static function (DefineHtmlEvent $event) {
+                if ($event->static) {
+                    return;
+                }
+                /** @var Category $element */
+                $category = $event->sender;
+                $event->html .= Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', [
+                    'entry' => $category,
+                ]);
+            }
+        );
+
+//        Craft::$app->getView()->hook('cp.entries.edit.meta', function (array $context) {
+//            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
+//        });
+//        Craft::$app->getView()->hook('cp.categories.edit.details', function (array $context) {
+//            return Craft::$app->getView()->renderTemplate('escape-exportimport/_components/hooks/element-edit-meta', $context);
+//        });
 
         // Register CP permissions
         Event::on(
@@ -117,37 +159,27 @@ class ExportImport extends Plugin
         );
 
         // Register CP route and nav item
-        // We wrap this in a Plugins::EVENT_AFTER_LOAD_PLUGINS event handler because we need to check the user's permissions for this
-        Event::on(
-            Plugins::class,
-            Plugins::EVENT_AFTER_LOAD_PLUGINS,
-            function () {
-                $currentUser = Craft::$app->getUser()->getIdentity();
-                if (!$currentUser || !$currentUser->can('escape-exportimport:import')) {
-                    return;
-                }
-                Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function (RegisterUrlRulesEvent $event) {
-                    $event->rules['import/<actionSlug:{slug}>'] = ['template' => 'escape-exportimport/index'];
-                });
+        $currentUser = Craft::$app->getUser()->getIdentity();
+        if (!$currentUser || !$currentUser->can('escape-exportimport:import')) {
+            return;
+        }
+        Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function (RegisterUrlRulesEvent $event) {
+            $event->rules['import/<actionSlug:{slug}>'] = ['template' => 'escape-exportimport/index'];
+        });
 
-                Event::on(
-                    Cp::class,
-                    Cp::EVENT_REGISTER_CP_NAV_ITEMS,
-                    function(RegisterCpNavItemsEvent $event) {
-                        $event->navItems[] = [
-                            'url' => 'import/url',
-                            'label' => Craft::t('site', 'Import'),
-                            'icon' => '@exportimport/icon.svg',
-                        ];
-                    }
-                );
+        Event::on(
+            Cp::class,
+            Cp::EVENT_REGISTER_CP_NAV_ITEMS,
+            function(RegisterCpNavItemsEvent $event) {
+                $event->navItems[] = [
+                    'url' => 'import/url',
+                    'label' => Craft::t('site', 'Import'),
+                    'icon' => '@exportimport/icon.svg',
+                ];
             }
         );
-
     }
 
-    // Protected Methods
-    // =========================================================================
     /**
      * Returns the custom Control Panel user permissions.
      *
@@ -165,7 +197,7 @@ class ExportImport extends Plugin
     /**
      * @return Settings
      */
-    protected function createSettingsModel()
+    protected function createSettingsModel(): ?\craft\base\Model
     {
         return new Settings();
     }
