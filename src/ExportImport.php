@@ -154,7 +154,7 @@ class ExportImport extends Plugin
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
             function (RegisterUserPermissionsEvent $event) {
-                $event->permissions['Escape Export & Import'] = $this->getCpPermissions();
+                $event->permissions[] = $this->getCpPermissions();
             }
         );
 
@@ -188,8 +188,11 @@ class ExportImport extends Plugin
     protected function getCpPermissions(): array
     {
         return [
-            'escape-exportimport:import' => [
-                'label' => 'Import elements',
+            'heading' => 'Escape Export & Import',
+            'permissions' => [
+                'escape-exportimport:import' => [
+                    'label' => 'Import elements',
+                ]
             ],
         ];
     }
