@@ -21,6 +21,7 @@ use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\models\EntryType;
 use craft\models\MatrixBlockType;
+use craft\models\Volume;
 use craft\redactor\Field as RedactorField;
 use craft\validators\HandleValidator;
 
@@ -256,17 +257,15 @@ class Import extends Component
 
                     // Make sure that the folder exists and that we have a folderId
                     $folderPath = $data['attributes']['folderPath'];
+
                     if (!$folderPath) {
                         // No folder path – use the root folder
-                        $folder = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
-                        $folderId = $folder->id;
-                    } else if ($volume->folderExists($folderPath)) {
-                        $folderId = $this->getFolderIdByVolumeIdAndFolderPath($volume->id, $folderPath);
+                        $folderId = Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id)?->id;
                     } else {
-                        $folderId = Craft::$app->getAssets()->ensureFolderByFullPathAndVolume($folderPath, $volume, true);
+                        $folderId = Craft::$app->getAssets()->ensureFolderByFullPathAndVolume($folderPath, $volume, false)?->id;
                     }
 
-                    if (!$folderId || !$folder = Craft::$app->getAssets()->findFolder(['id' => (int)$folderId])) {
+                    if (empty($folderId)) {
                         throw new \Exception('Invalid folder');
                     }
 
@@ -527,11 +526,11 @@ class Import extends Component
 
     /**
      * @param array $data
-     * @param VolumeInterface $volume
+     * @param Volume $volume
      * @return Asset
      * @throws \Exception
      */
-    protected function getAssetModel(array $data, VolumeInterface $volume): Asset
+    protected function getAssetModel(array $data, Volume $volume): Asset
     {
         $asset = new Asset();
         $asset->uploaderId = $this->author->id;
