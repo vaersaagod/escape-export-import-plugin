@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres
 to [Semantic Versioning](http://semver.org/).
 
+## 2.1.0 - 2024-03-26
+### Changed
+- Plugin now allows Fractal 0.20
+### Improved
+- Modernized the code base a little bit
+
 ## 2.0.2 - 2023-09-19
 
 ### Fixed

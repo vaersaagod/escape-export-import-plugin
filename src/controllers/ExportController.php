@@ -3,6 +3,8 @@
 namespace escape\exportimport\controllers;
 
 use Craft;
+use craft\base\Element;
+use craft\helpers\App;
 use craft\helpers\Json;
 
 use escape\exportimport\ExportImport;
@@ -54,7 +56,7 @@ class ExportController extends \craft\web\Controller
 
         $json = Json::encode($data);
 
-        $fileName = ['export', Craft::parseEnv($site->baseUrl)];
+        $fileName = ['export', App::parseEnv($site->baseUrl)];
         if (\count($elementIds) === 1) {
             /** @var Element $element */
             $element = Craft::$app->getElements()->getElementById($elementIds[0], null, $siteId);

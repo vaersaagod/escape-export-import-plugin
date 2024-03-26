@@ -4,6 +4,7 @@ namespace escape\exportimport\services;
 
 use Craft;
 
+use craft\base\Component;
 use craft\base\ElementInterface;
 use craft\elements\Asset;
 use craft\elements\Category;
@@ -18,7 +19,7 @@ use escape\exportimport\transformers\ElementTransformer;
  * Class Export
  * @package escape\exportimport\services
  */
-class Export extends \craft\base\Component
+class Export extends Component
 {
 
     /** @var string[] */
@@ -62,16 +63,16 @@ class Export extends \craft\base\Component
     public function getIsSourceExportable(string $key): bool
     {
 
-        $temp = \explode('/', $key);
+        $temp = explode('/', $key);
         $temp = [0] ?? null;
         if (!$temp) {
             return false;
         }
 
-        $temp = \explode(':', $key);
+        $temp = explode(':', $key);
         $sourceType = $temp[0] ?? null;
 
-        if (!$sourceType || !\in_array($sourceType, self::EXPORTABLE_SOURCE_TYPES)) {
+        if (!$sourceType || !in_array($sourceType, self::EXPORTABLE_SOURCE_TYPES)) {
             return false;
         }
 
@@ -88,13 +89,13 @@ class Export extends \craft\base\Component
                 if (!$section) {
                     return false;
                 }
-                return \in_array($section->handle, $settings->exportableSections ?? []);
+                return in_array($section->handle, $settings->exportableSections ?? []);
             case 'group':
                 $categoryGroup = Craft::$app->getCategories()->getGroupByUid($sourceUid);
                 if (!$categoryGroup) {
                     return false;
                 }
-                return \in_array($categoryGroup->handle, $settings->exportableCategoryGroups ?? []);
+                return in_array($categoryGroup->handle, $settings->exportableCategoryGroups ?? []);
         }
 
         return false;

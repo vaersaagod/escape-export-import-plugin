@@ -4,11 +4,11 @@
 namespace escape\exportimport\controllers;
 
 use Craft;
-use craft\base\VolumeInterface;
 use craft\elements\Asset;
+use craft\helpers\App;
 use craft\helpers\FileHelper;
-use craft\volumes\Local;
 
+use craft\models\Volume;
 use yii\web\BadRequestHttpException;
 use yii\web\ServerErrorHttpException;
 
@@ -65,11 +65,11 @@ class FilesController extends \craft\web\Controller
         if (!$asset->getVolume() instanceof Local) {
             return $asset->getCopyOfFile();
         } else {
-            /** @var VolumeInterface $volume */
+            /** @var Volume $volume */
             $volume = $asset->getVolume();
             $volumePath = \rtrim($volume->settings['path'], '/') . '/';
             $folderPath = \rtrim($asset->getFolder()->path, '/') . '/';
-            return Craft::parseEnv($this->fixSlashes($volumePath . $folderPath . $asset->filename));
+            return App::parseEnv($this->fixSlashes($volumePath . $folderPath . $asset->filename));
         }
     }
 

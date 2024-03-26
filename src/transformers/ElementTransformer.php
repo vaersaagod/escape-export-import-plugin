@@ -9,6 +9,7 @@ use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
 
+use craft\helpers\App;
 use escape\escapedam\EscapeDam;
 
 use League\Fractal\TransformerAbstract;
@@ -23,6 +24,8 @@ class ElementTransformer extends TransformerAbstract
     /**
      * @param ElementInterface $element
      * @return array
+     * @throws \yii\base\Exception
+     * @throws \yii\base\InvalidConfigException
      */
     public function transform(ElementInterface $element): array
     {
@@ -36,15 +39,15 @@ class ElementTransformer extends TransformerAbstract
         // Add additional info about the site
         $site = Craft::$app->getSites()->getSiteById($attributes['siteId']);
         $siteInfo = [
-            'baseUrl' => Craft::parseEnv($site->baseUrl),
-            'handle' => \getenv('ESCAPE_SITE_HANDLE') ?: '',
+            'baseUrl' => App::parseEnv($site->baseUrl),
+            'handle' => App::env('ESCAPE_SITE_HANDLE') ?? '',
             'siteId' => (int)$site->id,
             'language' => $site->language,
         ];
 
         // Add additional info about the element
         $elementData = [
-            'elementType' => \get_class($element),
+            'elementType' => get_class($element),
         ];
 
         if ($element instanceof Entry) {
@@ -59,7 +62,6 @@ class ElementTransformer extends TransformerAbstract
                 $elementData['damData'] = $damAsset;
             }
         } else if ($element instanceof Category) {
-            /** @var Category $element */
             $categoryGroup = $element->getGroup();
             $elementData['group'] = $categoryGroup->handle;
         }
