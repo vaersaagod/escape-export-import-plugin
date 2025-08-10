@@ -80,7 +80,7 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
             if ($this->targetSectionId) {
                 $elementType = $rawElement['element']['elementType'] ?? null;
                 if ($elementType === Entry::class) {
-                    $section = Craft::$app->getSections()->getSectionById($this->targetSectionId);
+                    $section = Craft::$app->getEntries()->getSectionById($this->targetSectionId);
                     if (!$section) {
                         throw new \Exception("Invalid target section ID \"$this->targetSectionId\"");
                     }

@@ -44,7 +44,7 @@ class Export extends Component
             case Entry::class:
                 /** @var Entry $element */
                 $exportableSections = $settings->exportableSections ?? [];
-                return \in_array($element->getSection()->handle, $exportableSections);
+                return \in_array($element->getSection()?->handle, $exportableSections);
             case Asset::class:
                 return true;
             case Category::class:
@@ -85,7 +85,7 @@ class Export extends Component
 
         switch ($sourceType) {
             case 'section':
-                $section = Craft::$app->getSections()->getSectionByUid($sourceUid);
+                $section = Craft::$app->getEntries()->getSectionByUid($sourceUid);
                 if (!$section) {
                     return false;
                 }

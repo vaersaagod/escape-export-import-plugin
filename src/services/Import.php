@@ -448,7 +448,7 @@ class Import extends Component
             // Get section from target source
             $temp = \explode(':', $targetSource);
             $targetSourceUid = $temp[1] ?? '';
-            if (!StringHelper::isUUID($targetSourceUid) || !$section = Craft::$app->getSections()->getSectionByUid($targetSourceUid)) {
+            if (!StringHelper::isUUID($targetSourceUid) || !$section = Craft::$app->getEntries()->getSectionByUid($targetSourceUid)) {
                 throw new \Exception("Invalid target section UUID");
             }
             // Get entry type
@@ -456,7 +456,7 @@ class Import extends Component
         } else {
             // Get section from imported element
             $sectionHandle = $data['element']['section'] ?? null;
-            $section = $sectionHandle ? Craft::$app->getSections()->getSectionByHandle($sectionHandle) : null;
+            $section = $sectionHandle ? Craft::$app->getEntries()->getSectionByHandle($sectionHandle) : null;
             if (!$section) {
                 throw new \Exception("Invalid section handle \"{$sectionHandle}\"");
             }

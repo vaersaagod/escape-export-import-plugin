@@ -67,7 +67,7 @@
 
             {% set config = craft.app.config.configFromFile('escape-exportimport') %}
             {% set exportableSections = config.exportableSections|default([]) %}
-            {% set sections = craft.app.sections.allSections|filter(section => section.handle in exportableSections) %}
+            {% set sections = craft.app.entries.allSections|filter(section => section.handle in exportableSections) %}
 
             {% if sections|length %}
                 {{ _forms.selectField({

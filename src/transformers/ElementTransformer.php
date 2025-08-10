@@ -51,8 +51,8 @@ class ElementTransformer extends TransformerAbstract
         ];
 
         if ($element instanceof Entry) {
-            $elementData['section'] = $element->getSection()->handle;
-            $elementData['type'] = Craft::$app->getSections()->getEntryTypeById($attributes['typeId'])->handle;
+            $elementData['section'] = $element->getSection()?->handle;
+            $elementData['type'] = Craft::$app->getEntries()->getEntryTypeById($attributes['typeId'])->handle;
         } else if ($element instanceof Asset) {
             $volume = $element->getVolume();
             $elementData['volume'] = $volume->handle;
