@@ -14,6 +14,7 @@ use craft\helpers\StringHelper;
 use escape\exportimport\ExportImport;
 use escape\exportimport\models\Settings;
 use escape\exportimport\transformers\ElementTransformer;
+use yii\base\Exception;
 
 /**
  * Class Export
@@ -40,17 +41,17 @@ class Export extends Component
         /** @var Settings $settings */
         $settings = ExportImport::getInstance()->getSettings();
 
-        switch (\get_class($element)) {
+        switch (get_class($element)) {
             case Entry::class:
                 /** @var Entry $element */
                 $exportableSections = $settings->exportableSections ?? [];
-                return \in_array($element->getSection()?->handle, $exportableSections);
+                return in_array($element->getSection()?->handle, $exportableSections);
             case Asset::class:
                 return true;
             case Category::class:
                 /** @var Category $element */
                 $exportableCategoryGroups = $settings->exportableCategoryGroups ?? [];
-                return \in_array($element->getGroup()->handle, $exportableCategoryGroups);
+                return in_array($element->getGroup()->handle, $exportableCategoryGroups);
         }
 
         return false;
@@ -107,6 +108,7 @@ class Export extends Component
      * @return array
      * @throws \craft\errors\SiteNotFoundException
      * @throws \yii\base\InvalidConfigException
+     * @throws Exception
      */
     public function getElementDataById(int $elementId, int $siteId = null): array
     {
@@ -125,7 +127,7 @@ class Export extends Component
             throw new \Exception("Element ID $elementId is not exportable");
         }
 
-        return (new ElementTransformer())->transform($element);
+        return new ElementTransformer()->transform($element);
     }
 
 }

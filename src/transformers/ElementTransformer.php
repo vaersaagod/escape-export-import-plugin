@@ -34,7 +34,7 @@ class ElementTransformer extends TransformerAbstract
         $fields = $element->getSerializedFieldValues();
 
         // Get the element attributes that aren't custom fields
-        $attributes = $element->toArray(\array_diff($element->attributes(), array_keys($fields)));
+        $attributes = $element->toArray(array_diff($element->attributes(), array_keys($fields)));
 
         // Add additional info about the site
         $site = Craft::$app->getSites()->getSiteById($attributes['siteId']);
@@ -57,7 +57,7 @@ class ElementTransformer extends TransformerAbstract
             $volume = $element->getVolume();
             $elementData['volume'] = $volume->handle;
             // Was this element originally imported from the Escape DAM?
-            if (!!Craft::$app->getPlugins()->getPlugin('escapedam')) {
+            if (Craft::$app->getPlugins()->getPlugin('escapedam')) {
                 $damAsset = EscapeDam::getInstance()->files->getFileForImportedAsset($element);
                 $elementData['damData'] = $damAsset;
             }

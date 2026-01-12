@@ -4,10 +4,6 @@ namespace escape\exportimport\services;
 
 use Craft;
 use craft\base\Component;
-use craft\base\ElementInterface;
-use craft\base\Field;
-use craft\base\VolumeInterface;
-use craft\db\Query;
 use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
@@ -19,17 +15,16 @@ use craft\helpers\ElementHelper;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
+use craft\htmlfield\HtmlField;
+use craft\models\CategoryGroup;
 use craft\models\EntryType;
-use craft\models\MatrixBlockType;
 use craft\models\Volume;
-use craft\redactor\Field as RedactorField;
 use craft\validators\HandleValidator;
 
 use escape\escapedam\EscapeDam;
 use escape\exportimport\helpers\FileHelper;
 
-use verbb\supertable\fields\SuperTableField;
-use verbb\supertable\models\SuperTableBlockType;
+use Illuminate\Support\Collection;
 
 /**
  * Class Import
@@ -37,9 +32,6 @@ use verbb\supertable\models\SuperTableBlockType;
  */
 class Import extends Component
 {
-
-    /** @var array */
-    protected array $memoizedMatrixBlockTypes = [];
 
     /** @var array|null */
     protected ?array $sourceSite;
@@ -49,9 +41,6 @@ class Import extends Component
 
     /** @var bool */
     protected bool $includeAssets = true;
-
-    /** @var string|null */
-    protected ?string $targetSource = null;
 
     /**
      * Import an element based on raw data
@@ -68,11 +57,11 @@ class Import extends Component
      * @throws \craft\errors\SiteNotFoundException
      * @throws \craft\errors\VolumeException
      * @throws \yii\base\Exception
+     * @throws \yii\base\InvalidConfigException
      * @throws \yii\db\Exception
      */
     public function importElement(array $data, int $authorId, bool $enabled = false, bool $includeAssets = true, ?string $targetSource = null): bool
     {
-
         $this->sourceSite = $data['site'];
         $this->includeAssets = $includeAssets;
 
@@ -81,26 +70,25 @@ class Import extends Component
             throw new \Exception('Invalid author ID');
         }
 
-        $element = null;
         $elementType = $data['element']['elementType'] ?? null;
 
         if ($elementType === Entry::class) {
             $element = $this->getEntryModel($data, $targetSource);
+            $fieldLayoutProvider = $element->getType();
         } else if ($elementType === Category::class) {
             $element = $this->getCategoryModel($data); // TODO support for target source (category group)
-        }
-
-        if (!$element) {
-            throw new \Exception("Element type {$elementType} not supported");
+            $fieldLayoutProvider = $element->getGroup();
+        } else {
+            throw new \Exception("Element type $elementType not supported");
         }
 
         $element->enabled = $enabled;
 
         // Only get custom fields that exist on the created element
-        $customFieldHandles = \array_keys($element->getFieldValues());
+        $customFieldHandles = array_keys($element->getFieldValues());
         $fieldValues = $data['fields'];
-        $fieldValuesToUse = \array_reduce(\array_keys($fieldValues), function (array $carry, string $handle) use ($customFieldHandles, $fieldValues) {
-            if (!\in_array($handle, $customFieldHandles)) {
+        $fieldValuesToUse = array_reduce(array_keys($fieldValues), function (array $carry, string $handle) use ($customFieldHandles, $fieldValues) {
+            if (!in_array($handle, $customFieldHandles)) {
                 return $carry;
             }
             $carry[$handle] = $fieldValues[$handle];
@@ -108,16 +96,15 @@ class Import extends Component
         }, []);
 
         // Set custom fields and save it again
-        $element->setFieldValues($this->normalizeFieldValues($element, $fieldValuesToUse));
+        $element->setFieldValues($this->normalizeFieldValues($fieldLayoutProvider, $fieldValuesToUse));
 
         return Craft::$app->getElements()->saveElement($element);
 
     }
 
     /**
-     * @param ElementInterface $element
+     * @param EntryType|CategoryGroup|Volume $fieldLayoutProvider
      * @param array $fieldValues
-     * @param string $context
      * @return array
      * @throws \Throwable
      * @throws \craft\errors\ElementNotFoundException
@@ -126,38 +113,22 @@ class Import extends Component
      * @throws \yii\base\Exception
      * @throws \yii\db\Exception
      */
-    protected function normalizeFieldValues(ElementInterface $element, array $fieldValues, string $context = 'global'): array
+    protected function normalizeFieldValues(EntryType|CategoryGroup|Volume $fieldLayoutProvider, array $fieldValues): array
     {
-
         $fields = [];
-
         foreach ($fieldValues as $fieldHandle => $fieldValue) {
-
-            $field = Craft::$app->getFields()->getFieldByHandle($fieldHandle, $context);
-            if (!$field) {
+            $field = $fieldLayoutProvider->getFieldLayout()->getFieldByHandle($fieldHandle);
+            if (empty($field)) {
                 continue;
             }
-
             if ($field instanceof Matrix) {
-
-                $fieldValue = $this->normalizeMatrixFieldValue($element, $field, $fieldValue);
-
-            } else if ($field instanceof SuperTableField) {
-
-                $fieldValue = $this->normalizeSuperTableFieldValue($element, $field, $fieldValue);
-
+                $fieldValue = $this->normalizeMatrixFieldValue($field, $fieldValue);
             } else if ($field instanceof Assets) {
-
-                $fieldValue = $this->normalizeAssetsFieldValue($element, $field, $fieldValue);
-
-            } else if ($field instanceof RedactorField) {
-
-                $fieldValue = $this->normalizeRedactorFieldValue($element, $field, $fieldValue);
-
+                $fieldValue = $this->normalizeAssetsFieldValue($field, $fieldValue);
+            } else if ($field instanceof HtmlField) {
+                $fieldValue = $this->normalizeHtmlFieldValue($field, $fieldValue);
             } else if ($field instanceof BaseRelationField) {
-
                 $fieldValue = [];
-
             }
 
             $fields[$fieldHandle] = $fieldValue;
@@ -167,15 +138,14 @@ class Import extends Component
     }
 
     /**
-     * @param ElementInterface $element
-     * @param RedactorField $field
-     * @param $fieldValue
+     * @param HtmlField $field
+     * @param mixed $fieldValue
      * @return mixed
      */
-    protected function normalizeRedactorFieldValue(ElementInterface $element, RedactorField $field, $fieldValue)
+    protected function normalizeHtmlFieldValue(HtmlField $field, mixed $fieldValue): mixed
     {
         if ($fieldValue) {
-            $fieldValue = $this->stripRefsFromRedactorFieldValue($field, $fieldValue);
+            $fieldValue = $this->stripRefsFromHtmlFieldValue($field, $fieldValue);
             $fieldValue = $field->normalizeValue($fieldValue);
         }
 
@@ -183,7 +153,6 @@ class Import extends Component
     }
 
     /**
-     * @param ElementInterface $element
      * @param Assets $field
      * @param $fieldValue
      * @return array
@@ -192,11 +161,11 @@ class Import extends Component
      * @throws \craft\errors\SiteNotFoundException
      * @throws \craft\errors\VolumeException
      * @throws \yii\base\Exception
+     * @throws \yii\base\InvalidConfigException
      * @throws \yii\db\Exception
      */
-    protected function normalizeAssetsFieldValue(ElementInterface $element, Assets $field, $fieldValue): array
+    protected function normalizeAssetsFieldValue(Assets $field, $fieldValue): array
     {
-
         if (!$this->includeAssets) {
             return [];
         }
@@ -207,7 +176,7 @@ class Import extends Component
             throw new \Exception("Unable to download asset; no source site URL");
         }
 
-        $sourceSiteUrl = \rtrim($sourceSiteUrl, '/');
+        $sourceSiteUrl = rtrim($sourceSiteUrl, '/');
         $sourceSiteId = $sourceSite['siteId'] ?? null;
         $assetIds = $fieldValue ?: [];
         $fieldValue = [];
@@ -215,10 +184,8 @@ class Import extends Component
         $damPluginInstalled = !!Craft::$app->getPlugins()->getPlugin('escapedam');
 
         foreach ($assetIds as $assetId) {
-
             try {
-
-                $jsonUrl = UrlHelper::urlWithParams("{$sourceSiteUrl}/actions/escape-exportimport/export", [
+                $jsonUrl = UrlHelper::urlWithParams("$sourceSiteUrl/actions/escape-exportimport/export", [
                     'elementId' => $assetId,
                     'siteId' => $sourceSiteId,
                 ]);
@@ -226,7 +193,7 @@ class Import extends Component
                 $json = FileHelper::readFile($jsonUrl);
                 $data = $json && Json::isJsonObject($json) ? Json::decode($json) : null;
 
-                if (!$data || empty($data)) {
+                if (empty($data)) {
                     continue;
                 }
 
@@ -243,16 +210,19 @@ class Import extends Component
                 $damId = (int)($damData['id'] ?? null);
 
                 if ($damPluginInstalled && $damId) {
-                    $asset = EscapeDam::getInstance()->files->importFile($damId, $field->id, $element->id, $element->siteId, null, $this->author->id);
+                    $asset = EscapeDam::getInstance()->files->importFile(
+                        fileId: $damId,
+                        fieldId: $field->id,
+                        uploaderId: $this->author->id
+                    );
                 }
 
-                if (!$asset) {
-
+                if (empty($asset)) {
                     // Not from DAM, download and create Asset
                     $volumeHandle = $data['element']['volume'] ?? null;
-                    /** @var VolumeInterface $volume */
+                    /** @var Volume $volume */
                     if (!$volumeHandle || !$volume = Craft::$app->getVolumes()->getVolumeByHandle($volumeHandle)) {
-                        throw new \Exception("Invalid volume handle \"{$volumeHandle}\"");
+                        throw new \Exception("Invalid volume handle \"$volumeHandle\"");
                     }
 
                     // Make sure that the folder exists and that we have a folderId
@@ -287,11 +257,11 @@ class Import extends Component
                     }
 
                     // Have to download the file
-                    $sourceFileUrl = UrlHelper::urlWithParams("{$sourceSiteUrl}/actions/escape-exportimport/files", ['assetId' => $assetId]);
+                    $sourceFileUrl = UrlHelper::urlWithParams("$sourceSiteUrl/actions/escape-exportimport/files", ['assetId' => $assetId]);
                     $tempPath = FileHelper::getTempPath();
                     FileHelper::downloadFile($sourceFileUrl, $tempPath);
 
-                    if (!\file_exists($tempPath) || !\is_file($tempPath)) {
+                    if (!file_exists($tempPath) || !is_file($tempPath)) {
                         throw new \Exception('Unable to download remote file');
                     }
 
@@ -301,7 +271,7 @@ class Import extends Component
                     $asset->newFolderId = $folderId;
 
                     // Set custom fields
-                    $fields = $this->normalizeFieldValues($element, $data['fields'] ?? []);
+                    $fields = $this->normalizeFieldValues($asset->getVolume(), $data['fields'] ?? []);
                     $asset->setFieldValues($fields);
 
                     Craft::$app->getElements()->saveElement($asset);
@@ -326,111 +296,41 @@ class Import extends Component
     }
 
     /**
-     * @param ElementInterface $element
-     * @param SuperTableField $field
-     * @param $fieldValue
-     * @return array
-     * @throws \Exception
-     */
-    protected function normalizeSuperTableFieldValue(ElementInterface $element, SuperTableField $field, $fieldValue): array
-    {
-        return \array_map(function (array $block) use ($element, $field) {
-            /** @var SuperTableBlockType $blockType */
-            $blockType = $this->getSuperTableBlockTypeForField($field);
-            return \array_merge($block, [
-                'type' => $blockType->id,
-                'fields' => $this->normalizeFieldValues($element, $block['fields'] ?? [], "superTableBlockType:{$blockType->uid}"),
-            ]);
-        }, \array_values($fieldValue ?? []));
-    }
-
-    /**
-     * @param ElementInterface $element
      * @param Matrix $field
      * @param $fieldValue
      * @return array
-     * @throws \Exception
+     * @throws \Throwable
+     * @throws \craft\errors\ElementNotFoundException
+     * @throws \craft\errors\SiteNotFoundException
+     * @throws \craft\errors\VolumeException
+     * @throws \yii\base\Exception
+     * @throws \yii\db\Exception
      */
-    protected function normalizeMatrixFieldValue(ElementInterface $element, Matrix $field, $fieldValue): array
+    protected function normalizeMatrixFieldValue(Matrix $field, $fieldValue): array
     {
-        return \array_map(function (array $block) use ($element, $field) {
-            $blockType = $this->getMatrixBlockTypeByHandle($block['type'], $field);
-            return \array_merge($block, [
-                'fields' => $this->normalizeFieldValues($element, $block['fields'] ?? [], "matrixBlockType:{$blockType->uid}"),
-            ]);
-        }, \array_values($fieldValue ?? []));
+        return array_map(function (array $nestedEntryData) use ($field) {
+            $entryTypeHandle = $nestedEntryData['type'] ?? null;
+            $entryType = Collection::make($field->getEntryTypes())
+                ->firstWhere('handle', $entryTypeHandle);
+            return [
+                ...$nestedEntryData,
+                'fields' => $this->normalizeFieldValues($entryType, $nestedEntryData['fields'] ?? []),
+            ];
+        }, array_values($fieldValue ?? []));
     }
 
     /**
-     * Return a MatrixBlockType instance for a field, based on handle
-     * I wish this was in core, but it ain't
-     *
-     * @param string $blockTypeHandle
-     * @param Field $field
-     * @return MatrixBlockType
-     * @throws \Exception
-     */
-    protected function getMatrixBlockTypeByHandle(string $blockTypeHandle, Field $field): MatrixBlockType
-    {
-        if (!isset($this->memoizedMatrixBlockTypes[$field->uid])) {
-            $blockTypes = Craft::$app->getMatrix()->getBlockTypesByFieldId($field->id);
-            $this->memoizedMatrixBlockTypes[$field->uid] = \array_reduce($blockTypes, function (array $carry, MatrixBlockType $blockType) {
-                $carry[$blockType->handle] = $blockType;
-                return $carry;
-            }, []);
-        }
-        $blockType = $this->memoizedMatrixBlockTypes[$field->uid][$blockTypeHandle] ?? null;
-        if (!$blockType) {
-            throw new \Exception("Invalid block type handle \"{$blockTypeHandle}\"");
-        }
-        return $blockType;
-    }
-
-    /**
-     * @param SuperTableField $field
-     * @return SuperTableBlockType
-     * @throws \Exception
-     */
-    protected function getSuperTableBlockTypeForField(SuperTableField $field): SuperTableBlockType
-    {
-        $blockTypes = $field->getBlockTypes();
-        if (empty($blockTypes)) {
-            throw new \Exception("Unable to get block type for Super Table field \"{$field->handle}\"");
-        }
-        /** @var SuperTableBlockType $blockType */
-        $blockType = $blockTypes[0];
-        return $blockType;
-    }
-
-    /**
-     * Return a folder's ID based on its volume and folder path
-     *
-     * @param int $volumeId
-     * @param string $folderPath
-     * @return int
-     */
-    protected function getFolderIdByVolumeIdAndFolderPath(int $volumeId, string $folderPath): int
-    {
-        return (int)(new Query())
-            ->select(['volumefolders.id'])
-            ->from('{{%volumefolders}} AS volumefolders')
-            ->where('volumefolders.volumeId=:volumeId', [':volumeId' => $volumeId])
-            ->andWhere('volumefolders.path=:folderPath', [':folderPath' => $folderPath])
-            ->scalar();
-    }
-
-    /**
-     * @param RedactorField $field
+     * @param HtmlField $field
      * @param $fieldValue
      * @return array|string|string[]|null
      */
-    protected function stripRefsFromRedactorFieldValue(RedactorField $field, $fieldValue)
+    protected function stripRefsFromHtmlFieldValue(HtmlField $field, $fieldValue): array|string|null
     {
         if (!StringHelper::contains($fieldValue, '{')) {
             return $fieldValue;
         }
 
-        return \preg_replace_callback('/(href=|src=)([\'"])(\{([\w\\\\]+\:\d+(?:@\d+)?\:(?:transform\:)?' . HandleValidator::$handlePattern . ')(?:\|\|[^\}]+)?\})(?:\?([^\'"#]*))?(#[^\'"#]+)?\2/', function($matches) {
+        return preg_replace_callback('/(href=|src=)([\'"])(\{([\w\\\\]+\:\d+(?:@\d+)?\:(?:transform\:)?' . HandleValidator::$handlePattern . ')(?:\|\|[^\}]+)?\})(?:\?([^\'"#]*))?(#[^\'"#]+)?\2/', function($matches) {
             return '';
         }, $fieldValue);
     }
@@ -439,41 +339,30 @@ class Import extends Component
      * @param array $data
      * @param string|null $targetSource
      * @return Entry
+     * @throws \DateMalformedStringException
      * @throws \craft\errors\OperationAbortedException
      */
     protected function getEntryModel(array $data, ?string $targetSource = null): Entry
     {
-
         if ($targetSource && StringHelper::startsWith($targetSource, 'section:')) {
             // Get section from target source
-            $temp = \explode(':', $targetSource);
+            $temp = explode(':', $targetSource);
             $targetSourceUid = $temp[1] ?? '';
             if (!StringHelper::isUUID($targetSourceUid) || !$section = Craft::$app->getEntries()->getSectionByUid($targetSourceUid)) {
                 throw new \Exception("Invalid target section UUID");
             }
-            // Get entry type
-            $entryType = ($section->getEntryTypes())[0];
-        } else {
-            // Get section from imported element
-            $sectionHandle = $data['element']['section'] ?? null;
-            $section = $sectionHandle ? Craft::$app->getEntries()->getSectionByHandle($sectionHandle) : null;
-            if (!$section) {
-                throw new \Exception("Invalid section handle \"{$sectionHandle}\"");
-            }
-            // Get entry type
-            $entryTypeHandle = $data['element']['type'] ?? null;
-            /** @var EntryType $entryType */
-            $entryType = null;
-            foreach ($section->getEntryTypes() as $sectionEntryType) {
-                if ($sectionEntryType->handle === $entryTypeHandle) {
-                    $entryType = $sectionEntryType;
-                    break;
-                }
-            }
-            if (!$entryType) {
-                throw new \Exception("Invalid entry type \"{$entryTypeHandle}\"");
-            }
+        } else if ($sectionHandle = $data['element']['section'] ?? null) {
+            $section = Craft::$app->getEntries()->getSectionByHandle($sectionHandle);
         }
+
+        if (!$section) {
+            throw new \Exception('Target section not found');
+        }
+
+        // Get entry type
+        $entryTypeHandle = $data['element']['type'];
+        $entryType = Collection::make($section->getEntryTypes())
+            ->firstWhere('handle', $entryTypeHandle) ?? $section->getEntryTypes()[0];
 
         $entry = new Entry();
         $entry->authorId = $this->author->id;
