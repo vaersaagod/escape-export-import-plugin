@@ -4,6 +4,7 @@ namespace escape\exportimport\services;
 
 use Craft;
 use craft\base\Component;
+use craft\base\ElementInterface;
 use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
@@ -96,24 +97,25 @@ class Import extends Component
         }, []);
 
         // Set custom fields and save it again
-        $element->setFieldValues($this->normalizeFieldValues($fieldLayoutProvider, $fieldValuesToUse));
+        $element->setFieldValues($this->normalizeFieldValues($fieldLayoutProvider, $fieldValuesToUse, $element));
 
         return Craft::$app->getElements()->saveElement($element);
-
     }
 
     /**
      * @param EntryType|CategoryGroup|Volume $fieldLayoutProvider
      * @param array $fieldValues
+     * @param ElementInterface|null $element
      * @return array
      * @throws \Throwable
      * @throws \craft\errors\ElementNotFoundException
      * @throws \craft\errors\SiteNotFoundException
      * @throws \craft\errors\VolumeException
      * @throws \yii\base\Exception
+     * @throws \yii\base\InvalidConfigException
      * @throws \yii\db\Exception
      */
-    protected function normalizeFieldValues(EntryType|CategoryGroup|Volume $fieldLayoutProvider, array $fieldValues): array
+    protected function normalizeFieldValues(EntryType|CategoryGroup|Volume $fieldLayoutProvider, array $fieldValues, ?ElementInterface $element = null): array
     {
         $fields = [];
         foreach ($fieldValues as $fieldHandle => $fieldValue) {
@@ -122,11 +124,11 @@ class Import extends Component
                 continue;
             }
             if ($field instanceof Matrix) {
-                $fieldValue = $this->normalizeMatrixFieldValue($field, $fieldValue);
+                $fieldValue = $this->normalizeMatrixFieldValue($field, $fieldValue, $element);
             } else if ($field instanceof Assets) {
-                $fieldValue = $this->normalizeAssetsFieldValue($field, $fieldValue);
+                $fieldValue = $this->normalizeAssetsFieldValue($field, $fieldValue, $element);
             } else if ($field instanceof HtmlField) {
-                $fieldValue = $this->normalizeHtmlFieldValue($field, $fieldValue);
+                $fieldValue = $this->normalizeHtmlFieldValue($field, $fieldValue, $element);
             } else if ($field instanceof BaseRelationField) {
                 $fieldValue = [];
             }
@@ -140,13 +142,14 @@ class Import extends Component
     /**
      * @param HtmlField $field
      * @param mixed $fieldValue
+     * @param ElementInterface|null $element
      * @return mixed
      */
-    protected function normalizeHtmlFieldValue(HtmlField $field, mixed $fieldValue): mixed
+    protected function normalizeHtmlFieldValue(HtmlField $field, mixed $fieldValue, ?ElementInterface $element = null): mixed
     {
         if ($fieldValue) {
-            $fieldValue = $this->stripRefsFromHtmlFieldValue($field, $fieldValue);
-            $fieldValue = $field->normalizeValue($fieldValue);
+            $fieldValue = $this->stripRefsFromHtmlFieldValue($fieldValue);
+            $fieldValue = $field->normalizeValue($fieldValue, $element);
         }
 
         return $fieldValue;
@@ -155,6 +158,7 @@ class Import extends Component
     /**
      * @param Assets $field
      * @param $fieldValue
+     * @param ElementInterface|null $element
      * @return array
      * @throws \Throwable
      * @throws \craft\errors\ElementNotFoundException
@@ -164,7 +168,7 @@ class Import extends Component
      * @throws \yii\base\InvalidConfigException
      * @throws \yii\db\Exception
      */
-    protected function normalizeAssetsFieldValue(Assets $field, $fieldValue): array
+    protected function normalizeAssetsFieldValue(Assets $field, $fieldValue, ?ElementInterface $element = null): array
     {
         if (!$this->includeAssets) {
             return [];
@@ -298,33 +302,34 @@ class Import extends Component
     /**
      * @param Matrix $field
      * @param $fieldValue
+     * @param ElementInterface|null $element
      * @return array
      * @throws \Throwable
      * @throws \craft\errors\ElementNotFoundException
      * @throws \craft\errors\SiteNotFoundException
      * @throws \craft\errors\VolumeException
      * @throws \yii\base\Exception
+     * @throws \yii\base\InvalidConfigException
      * @throws \yii\db\Exception
      */
-    protected function normalizeMatrixFieldValue(Matrix $field, $fieldValue): array
+    protected function normalizeMatrixFieldValue(Matrix $field, $fieldValue, ?ElementInterface $element = null): array
     {
-        return array_map(function (array $nestedEntryData) use ($field) {
+        return array_map(function (array $nestedEntryData) use ($field, $element) {
             $entryTypeHandle = $nestedEntryData['type'] ?? null;
             $entryType = Collection::make($field->getEntryTypes())
                 ->firstWhere('handle', $entryTypeHandle);
             return [
                 ...$nestedEntryData,
-                'fields' => $this->normalizeFieldValues($entryType, $nestedEntryData['fields'] ?? []),
+                'fields' => $this->normalizeFieldValues($entryType, $nestedEntryData['fields'] ?? [], $element),
             ];
         }, array_values($fieldValue ?? []));
     }
 
     /**
-     * @param HtmlField $field
      * @param $fieldValue
      * @return array|string|string[]|null
      */
-    protected function stripRefsFromHtmlFieldValue(HtmlField $field, $fieldValue): array|string|null
+    protected function stripRefsFromHtmlFieldValue($fieldValue): array|string|null
     {
         if (!StringHelper::contains($fieldValue, '{')) {
             return $fieldValue;
