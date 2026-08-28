@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres
 to [Semantic Versioning](http://semver.org/).
 
+## 3.1.0 - 2026-08-28
+### Changed 
+- Plugin now allows Fractal 0.21
+
 ## 3.0.1 - 2026-02-12
 ### Fixed
 - Fixed a CKEditor related bug

@@ -2,7 +2,7 @@
     "name": "escape/exportimport",
     "description": "",
     "type": "craft-plugin",
-    "version": "3.0.1",
+    "version": "3.1.0",
     "keywords": [],
     "license": "MIT",
     "authors": [
@@ -13,7 +13,7 @@
     ],
     "require": {
         "craftcms/cms": "^5.8.0",
-        "league/fractal": "^0.18.0|^0.20"
+        "league/fractal": "^0.18.0|^0.20|^0.21"
     },
     "autoload": {
         "psr-4": {
