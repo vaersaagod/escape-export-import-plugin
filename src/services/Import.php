@@ -73,6 +73,11 @@ class Import extends Component
 
         $elementType = $data['element']['elementType'] ?? null;
 
+        if ($elementType === Category::class && $entryData = $this->getEntrifiedCategoryData($data)) {
+            $data = $entryData;
+            $elementType = Entry::class;
+        }
+
         if ($elementType === Entry::class) {
             $element = $this->getEntryModel($data, $targetSource);
             $fieldLayoutProvider = $element->getType();
@@ -349,6 +354,8 @@ class Import extends Component
      */
     protected function getEntryModel(array $data, ?string $targetSource = null): Entry
     {
+        $section = null;
+
         if ($targetSource && StringHelper::startsWith($targetSource, 'section:')) {
             // Get section from target source
             $temp = explode(':', $targetSource);
@@ -364,8 +371,8 @@ class Import extends Component
             throw new \Exception('Target section not found');
         }
 
-        // Get entry type
-        $entryTypeHandle = $data['element']['type'];
+        // Get entry type. Entrified categories don't have one, and get the section's first
+        $entryTypeHandle = $data['element']['type'] ?? null;
         $entryType = Collection::make($section->getEntryTypes())
             ->firstWhere('handle', $entryTypeHandle) ?? $section->getEntryTypes()[0];
 
@@ -375,7 +382,11 @@ class Import extends Component
         $entry->typeId = $entryType->id;
         $entry->title = $data['attributes']['title'];
         $entry->slug = $data['attributes']['slug'];
-        $entry->postDate = new \DateTime(date('Y-m-d H:i:s', strtotime($data['attributes']['postDate'])));
+
+        // Categories don't have a post date; leave it to Craft
+        if ($postDate = $data['attributes']['postDate'] ?? null) {
+            $entry->postDate = new \DateTime(date('Y-m-d H:i:s', strtotime($postDate)));
+        }
 
         $sourceSiteUrl = ($this->sourceSite ?? [])['baseUrl'] ?? null;
         if ($sourceSiteUrl) {
@@ -388,6 +399,31 @@ class Import extends Component
 
         return $entry;
 
+    }
+
+    /**
+     * Rewrites exported category data as entry data, if the category group has been entrified on this site.
+     * Lets categories exported from a site that still has the category group be imported here.
+     *
+     * Entrification keeps the handle, so the category is imported to the section with the category group's handle,
+     * unless a target section is selected.
+     *
+     * @param array $data
+     * @return array|null
+     */
+    protected function getEntrifiedCategoryData(array $data): ?array
+    {
+        $categoryGroupHandle = $data['element']['group'] ?? null;
+
+        if (!$categoryGroupHandle || Craft::$app->getCategories()->getGroupByHandle($categoryGroupHandle)) {
+            return null;
+        }
+
+        $data['element']['elementType'] = Entry::class;
+        $data['element']['section'] = $categoryGroupHandle;
+        unset($data['element']['group']);
+
+        return $data;
     }
 
     /**

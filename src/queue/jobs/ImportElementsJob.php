@@ -3,8 +3,6 @@
 namespace escape\exportimport\queue\jobs;
 
 use Craft;
-use craft\elements\Category;
-use craft\elements\Entry;
 use craft\helpers\App;
 
 use escape\exportimport\ExportImport;
@@ -70,25 +68,21 @@ class ImportElementsJob extends \craft\queue\BaseJob implements RetryableJobInte
             return;
         }
 
+        // Maybe get target source. Applies to categories too, since they're imported as entries where their
+        // category group has been entrified
+        $targetSource = null;
+        if ($this->targetSectionId) {
+            $section = Craft::$app->getEntries()->getSectionById($this->targetSectionId);
+            if (!$section) {
+                throw new \Exception("Invalid target section ID \"$this->targetSectionId\"");
+            }
+            $targetSource = "section:$section->uid";
+        }
+
         $count = 0;
         $total = \count($this->data);
 
         foreach ($this->data as $rawElement) {
-
-            // Maybe get target source
-            $targetSource = null;
-            if ($this->targetSectionId) {
-                $elementType = $rawElement['element']['elementType'] ?? null;
-                if ($elementType === Entry::class) {
-                    $section = Craft::$app->getEntries()->getSectionById($this->targetSectionId);
-                    if (!$section) {
-                        throw new \Exception("Invalid target section ID \"$this->targetSectionId\"");
-                    }
-                    $targetSource = "section:$section->uid";
-                } else if ($elementType === Category::class) {
-                    // TODO support for target category group as source
-                }
-            }
 
             $this->setProgress($queue, $count / $total, Craft::t('app', '{step} of {total}', [
                 'step' => $count + 1,

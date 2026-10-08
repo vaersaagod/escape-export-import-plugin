@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) and this project adheres
 to [Semantic Versioning](http://semver.org/).
 
+## Unreleased
+### Fixed
+- Categories exported from a site with category groups can now be imported to a site where those groups have been entrified. They're saved as entries in the section with the category group's handle, or in the selected target section
+- Fixed an error when importing entries without a post date or entry type in the export data
+
 ## 3.1.0 - 2026-08-28
 ### Changed 
 - Plugin now allows Fractal 0.21
