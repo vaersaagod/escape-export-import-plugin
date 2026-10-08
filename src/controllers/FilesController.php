@@ -1,85 +1,69 @@
 <?php
 
-
 namespace escape\exportimport\controllers;
 
 use Craft;
 use craft\elements\Asset;
-use craft\helpers\App;
-use craft\helpers\FileHelper;
+use craft\errors\FsException;
 
-use craft\models\Volume;
-use yii\web\BadRequestHttpException;
-use yii\web\ServerErrorHttpException;
+use escape\exportimport\ExportImport;
+
+use yii\web\ForbiddenHttpException;
+use yii\web\NotFoundHttpException;
+use yii\web\Response;
 
 /**
- * Class DownloadController
+ * Class FilesController
  * @package escape\exportimport\controllers
  */
 class FilesController extends \craft\web\Controller
 {
 
-    /** @var string[] */
+    /**
+     * Anonymous, so other sites can download files; they're authorized by the token instead
+     *
+     * @var string[]
+     */
     public array|int|bool $allowAnonymous = ['index'];
 
     /**
-     * @return bool
-     * @throws BadRequestHttpException
-     * @throws ServerErrorHttpException
+     * Send an asset's file, streamed from its volume
+     *
+     * @return Response
+     * @throws ForbiddenHttpException
+     * @throws NotFoundHttpException
+     * @throws \craft\errors\SiteNotFoundException
      * @throws \yii\base\InvalidConfigException
+     * @throws \yii\web\BadRequestHttpException
+     * @throws \yii\web\RangeNotSatisfiableHttpException
      */
-    public function actionIndex()
+    public function actionIndex(): Response
     {
 
-        $assetId = (int)Craft::$app->getRequest()->getRequiredParam('assetId');
+        $export = ExportImport::getInstance()->export;
 
-        if (!$assetId || !$asset = Asset::find()->id($assetId)->anyStatus()->one()) {
-            throw new BadRequestHttpException('Invalid asset ID');
+        if (!$export->getCanRequestExport($this->request, Craft::$app->getUser()->getIdentity())) {
+            throw new ForbiddenHttpException('Not authorized to export');
         }
 
-        $filePath = $this->getFilePath($asset);
+        $assetId = (int)$this->request->getRequiredParam('assetId');
+        $asset = $assetId ? $export->getExportableElementById($assetId) : null;
 
-        if (!\file_exists($filePath) || !\is_file($filePath)) {
-            throw new ServerErrorHttpException("File \"{$filePath}\" does not exist or is not a file");
+        if (!$asset instanceof Asset) {
+            throw new NotFoundHttpException('Asset not found');
         }
 
-        $fileSize = \filesize($filePath);
-        $mimeType = FileHelper::getMimeType($filePath);
-
-        \header("Content-Type: {$mimeType}");
-        \header("Content-Length: {$fileSize}");
-
-        $fp = \fopen($filePath, 'rb');
-        \fpassthru($fp);
-
-        return true;
-    }
-
-    /**
-     * @param Asset $asset
-     * @return string
-     * @throws \yii\base\InvalidConfigException
-     */
-    protected function getFilePath(Asset $asset): string
-    {
-        if (!$asset->getVolume() instanceof Local) {
-            return $asset->getCopyOfFile();
-        } else {
-            /** @var Volume $volume */
-            $volume = $asset->getVolume();
-            $volumePath = \rtrim($volume->settings['path'], '/') . '/';
-            $folderPath = \rtrim($asset->getFolder()->path, '/') . '/';
-            return App::parseEnv($this->fixSlashes($volumePath . $folderPath . $asset->filename));
+        try {
+            $stream = $asset->getStream();
+        } catch (FsException $e) {
+            Craft::error($e->getMessage(), __METHOD__);
+            throw new NotFoundHttpException('File not found');
         }
-    }
 
-    /**
-     * @param string $str
-     * @return string
-     */
-    protected function fixSlashes(string $str): string
-    {
-        return \preg_replace('~(^|[^:])//+~', '\\1/', $str);
+        return $this->response->sendStreamAsFile($stream, $asset->getFilename(), [
+            'fileSize' => $asset->size,
+            'mimeType' => $asset->getMimeType(),
+        ]);
     }
 
 }

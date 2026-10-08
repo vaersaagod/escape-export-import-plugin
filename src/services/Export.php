@@ -9,8 +9,11 @@ use craft\base\ElementInterface;
 use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
+use craft\elements\User;
 use craft\helpers\ElementHelper;
 use craft\helpers\StringHelper;
+use craft\web\Request;
+use escape\exportimport\controllers\ImportController;
 use escape\exportimport\ExportImport;
 use escape\exportimport\models\Settings;
 use escape\exportimport\transformers\ElementTransformer;
@@ -103,6 +106,52 @@ class Export extends Component
     }
 
     /**
+     * Returns whether a request may fetch exports: it either sends the token, or comes from a user who can import.
+     * The one gate for the export and files endpoints.
+     *
+     * @param Request $request
+     * @param User|null $user
+     * @return bool
+     */
+    public function getCanRequestExport(Request $request, ?User $user): bool
+    {
+        /** @var Settings $settings */
+        $settings = ExportImport::getInstance()->getSettings();
+        $token = $settings->getToken();
+        $requestToken = $request->getHeaders()->get(ExportImport::TOKEN_HEADER);
+
+        if ($token && is_string($requestToken) && hash_equals($token, $requestToken)) {
+            return true;
+        }
+
+        return (bool)$user?->can(ImportController::PERMISSION_IMPORT);
+    }
+
+    /**
+     * Returns an element if it exists and is exportable. Doesn't say which, so the export can't be used to probe for IDs.
+     *
+     * @param int $elementId
+     * @param int|null $siteId
+     * @return ElementInterface|null
+     * @throws \craft\errors\SiteNotFoundException
+     * @throws \yii\base\InvalidConfigException
+     */
+    public function getExportableElementById(int $elementId, ?int $siteId = null): ?ElementInterface
+    {
+        if (!$siteId) {
+            $siteId = Craft::$app->getSites()->getCurrentSite()->id;
+        }
+
+        $element = Craft::$app->getElements()->getElementById($elementId, null, $siteId);
+
+        if (!$element || !$this->getIsElementExportable($element)) {
+            return null;
+        }
+
+        return $element;
+    }
+
+    /**
      * @param int $elementId
      * @param int|null $siteId
      * @return array
@@ -110,21 +159,12 @@ class Export extends Component
      * @throws \yii\base\InvalidConfigException
      * @throws Exception
      */
-    public function getElementDataById(int $elementId, int $siteId = null): array
+    public function getElementDataById(int $elementId, ?int $siteId = null): array
     {
-
-        if (!$siteId) {
-            $siteId = Craft::$app->getSites()->getCurrentSite()->id;
-        }
-
-        $element = Craft::$app->getElements()->getElementById($elementId, null, $siteId);
+        $element = $this->getExportableElementById($elementId, $siteId);
 
         if (!$element) {
-            throw new \Exception("Element ID $elementId does not exist");
-        }
-
-        if (!$this->getIsElementExportable($element)) {
-            throw new \Exception("Element ID $elementId is not exportable");
+            throw new \Exception("Element ID $elementId not found");
         }
 
         return new ElementTransformer()->transform($element);

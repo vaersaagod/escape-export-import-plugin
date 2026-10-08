@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/) and this p
 to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
+
+> [!IMPORTANT]
+> Sites now need a shared `token`, and a list of `sourceHosts` to import from, to exchange elements. Set both on every site before updating. See the README.
+
+### Added
+- Added the `token` and `sourceHosts` settings
+### Security
+- Hardened the export and import endpoints
 ### Fixed
 - Categories exported from a site with category groups can now be imported to a site where those groups have been entrified. They're saved as entries in the section with the category group's handle, or in the selected target section
 - Fixed an error when importing entries without a post date or entry type in the export data

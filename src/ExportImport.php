@@ -21,6 +21,7 @@ use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
 
+use escape\exportimport\controllers\ImportController;
 use escape\exportimport\elements\actions\CopyExportElementsUrl;
 use escape\exportimport\models\Settings;
 use escape\exportimport\services\Export;
@@ -39,6 +40,9 @@ use yii\base\Module;
 class ExportImport extends Plugin
 {
 
+    /** @var string The request header sites send the token in */
+    const TOKEN_HEADER = 'X-Escape-ExportImport-Token';
+
     /**
      * @inheritdoc
      */
@@ -48,7 +52,6 @@ class ExportImport extends Plugin
         parent::init();
 
         // Define a custom alias named after the namespace
-        Craft::setAlias('@modules', dirname(__DIR__));
         Craft::setAlias('@exportimport', __DIR__);
 
         // Set the controllerNamespace based on whether this is a console or web request
@@ -160,7 +163,7 @@ class ExportImport extends Plugin
 
         // Register CP route and nav item
         $currentUser = Craft::$app->getUser()->getIdentity();
-        if (!$currentUser || !$currentUser->can('escape-exportimport:import')) {
+        if (!$currentUser || !$currentUser->can(ImportController::PERMISSION_IMPORT)) {
             return;
         }
         Event::on(UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, function (RegisterUrlRulesEvent $event) {
@@ -190,7 +193,7 @@ class ExportImport extends Plugin
         return [
             'heading' => 'Escape Export & Import',
             'permissions' => [
-                'escape-exportimport:import' => [
+                ImportController::PERMISSION_IMPORT => [
                     'label' => 'Import elements',
                 ]
             ],
